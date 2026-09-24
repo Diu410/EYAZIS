@@ -1,0 +1,9 @@
+.idea/
+.venv/
+.npm-cache/
+.pip-cache/
+__pycache__/
+*.py[cod]
+~$*.docx
+.DS_Store
+Thumbs.db

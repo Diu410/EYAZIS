@@ -1,0 +1,21 @@
+# Minimal sc-machine service for the optional lab 3 OSTIS demo.
+# The image version matches py-sc-client==0.4.0.
+services:
+  machine:
+    image: ostis/sc-machine:0.10.0
+    command: ["run"]
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./ostis-kb:/kb
+      - ostis-kb-binary:/kb.bin
+    environment:
+      REBUILD_KB: "0"
+      KB_PATH: /kb
+      BINARY_PATH: /sc-machine/build/Release/bin
+      EXTENSIONS_PATH: /sc-machine/build/Release/lib/extensions
+      CONFIG_PATH: /sc-machine/sc-machine.ini
+      SC_SERVER_HOST: 0.0.0.0
+
+volumes:
+  ostis-kb-binary:

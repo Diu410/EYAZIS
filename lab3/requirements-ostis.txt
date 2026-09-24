@@ -1,0 +1,2 @@
+# Optional. The official client documents compatibility with sc-machine 0.10.0.
+py-sc-client==0.4.0

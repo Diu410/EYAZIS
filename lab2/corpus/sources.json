@@ -1,0 +1,106 @@
+[
+  {
+    "purpose": "training",
+    "language": "ru",
+    "title": "Информатика",
+    "url": "https://ru.wikipedia.org/wiki/Информатика"
+  },
+  {
+    "purpose": "training",
+    "language": "ru",
+    "title": "Алгоритм",
+    "url": "https://ru.wikipedia.org/wiki/Алгоритм"
+  },
+  {
+    "purpose": "training",
+    "language": "ru",
+    "title": "База данных",
+    "url": "https://ru.wikipedia.org/wiki/База_данных"
+  },
+  {
+    "purpose": "training",
+    "language": "ru",
+    "title": "Литература",
+    "url": "https://ru.wikipedia.org/wiki/Литература"
+  },
+  {
+    "purpose": "training",
+    "language": "de",
+    "title": "Informatik",
+    "url": "https://de.wikipedia.org/wiki/Informatik"
+  },
+  {
+    "purpose": "training",
+    "language": "de",
+    "title": "Algorithmus",
+    "url": "https://de.wikipedia.org/wiki/Algorithmus"
+  },
+  {
+    "purpose": "training",
+    "language": "de",
+    "title": "Datenbank",
+    "url": "https://de.wikipedia.org/wiki/Datenbank"
+  },
+  {
+    "purpose": "training",
+    "language": "de",
+    "title": "Literatur",
+    "url": "https://de.wikipedia.org/wiki/Literatur"
+  },
+  {
+    "purpose": "test",
+    "language": "ru",
+    "title": "Машинное обучение",
+    "file": "test_ru_1.html",
+    "url": "https://ru.wikipedia.org/wiki/Машинное_обучение"
+  },
+  {
+    "purpose": "test",
+    "language": "ru",
+    "title": "Роман",
+    "file": "test_ru_2.html",
+    "url": "https://ru.wikipedia.org/wiki/Роман"
+  },
+  {
+    "purpose": "test",
+    "language": "ru",
+    "title": "Программирование",
+    "file": "test_ru_3.html",
+    "url": "https://ru.wikipedia.org/wiki/Программирование"
+  },
+  {
+    "purpose": "test",
+    "language": "ru",
+    "title": "Поэзия",
+    "file": "test_ru_4.html",
+    "url": "https://ru.wikipedia.org/wiki/Поэзия"
+  },
+  {
+    "purpose": "test",
+    "language": "de",
+    "title": "Maschinelles Lernen",
+    "file": "test_de_1.html",
+    "url": "https://de.wikipedia.org/wiki/Maschinelles_Lernen"
+  },
+  {
+    "purpose": "test",
+    "language": "de",
+    "title": "Roman",
+    "file": "test_de_2.html",
+    "url": "https://de.wikipedia.org/wiki/Roman"
+  },
+  {
+    "purpose": "test",
+    "language": "de",
+    "title": "Programmierung",
+    "file": "test_de_3.html",
+    "url": "https://de.wikipedia.org/wiki/Programmierung"
+  },
+  {
+    "purpose": "test",
+    "language": "de",
+    "title": "Lyrik",
+    "file": "test_de_4.html",
+    "url": "https://de.wikipedia.org/wiki/Lyrik"
+  }
+]
