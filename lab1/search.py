@@ -1,6 +1,7 @@
 """Laboratory 1: Russian document indexing, vector search and evaluation."""
 
 from collections import Counter
+from difflib import get_close_matches
 from html.parser import HTMLParser
 from math import log, sqrt
 import re
@@ -102,6 +103,62 @@ def get_document(document_id):
     return dict(row) if row else None
 
 
+def index_preview(title, body, limit=12):
+    """Build a non-persistent preview of the document search image.
+
+    The candidate is evaluated together with the current collection, but is
+    not written to SQLite. This lets the UI show the indexing decision before
+    the user confirms saving the document.
+    """
+    title, body = title.strip(), body.strip()
+    if not body:
+        raise ValueError("Укажите текст документа")
+    raw_words = WORD_RE.findall(title + " " + body)
+    candidate = Counter(tokens(title + " " + body))
+    if not candidate:
+        raise ValueError("В тексте нет русских ключевых слов")
+
+    with connect() as db:
+        rows = list(db.execute("SELECT term, COUNT(*) AS document_frequency FROM terms GROUP BY term"))
+        document_count = db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+    document_frequency = {row["term"]: row["document_frequency"] for row in rows}
+    document_count += 1
+    terms = []
+    for term, frequency in candidate.items():
+        df = document_frequency.get(term, 0) + 1
+        idf = log(document_count / df)
+        terms.append({"term": term, "tf": frequency, "df": df,
+                      "idf": round(idf, 4), "weight": round(frequency * idf, 4)})
+    terms.sort(key=lambda item: (-item["weight"], item["term"]))
+    return {
+        "characters": len(body),
+        "words": len(raw_words),
+        "unique_terms": len(candidate),
+        "removed_words": max(0, len(raw_words) - sum(candidate.values())),
+        "collection_size": document_count,
+        "terms": terms[:limit],
+    }
+
+
+def search_assist(query, limit=8):
+    """Return transparent lexical suggestions from the current index."""
+    words = set(tokens(query))
+    with connect() as db:
+        vocabulary = [row["term"] for row in db.execute("SELECT DISTINCT term FROM terms")]
+    vocabulary = sorted(vocabulary)
+    matched = sorted(words & set(vocabulary))
+    suggestions = []
+    for word in sorted(words - set(matched)):
+        suggestions.extend(get_close_matches(word, vocabulary, n=3, cutoff=0.55))
+    suggestions = list(dict.fromkeys(suggestions))[:limit]
+    return {
+        "normalized": " ".join(sorted(words)),
+        "matched": matched,
+        "missing": sorted(words - set(matched)),
+        "suggestions": suggestions,
+    }
+
+
 def search(query, document_ids=None):
     words = set(tokens(query))
     if not words:
@@ -134,8 +191,13 @@ def search(query, document_ids=None):
                    for term, tf in frequencies.items()}
         norm = sqrt(sum(weight * weight for weight in weights.values()))
         rank = sum(weights[term] for term in matched) / (norm * query_norm) if norm else 0.0
+        contributions = [{"term": term, "tf": frequencies[term],
+                         "idf": log(total / document_frequency[term]),
+                         "weight": weights[term],
+                         "contribution": weights[term] / (norm * query_norm) if norm else 0.0}
+                        for term in matched]
         results.append({**doc, "rank": rank, "matched": matched,
-                        "snippet": doc["body"][:300]})
+                        "snippet": doc["body"][:300], "contributions": contributions})
     return sorted(results, key=lambda result: (-result["rank"], result["id"]))
 
 

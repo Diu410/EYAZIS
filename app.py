@@ -80,8 +80,13 @@ def error_page(message):
 
 def search_page(query=""):
     form = f'''<p class="lead">Поиск по русскоязычным документам. Добавьте текст или импортируйте страницу из интернета.</p>
-<form method="get" action="/search" class="row"><input name="q" value="{h(query)}" placeholder="Введите запрос на русском языке" required autofocus>
+<form method="get" action="/search" class="row"><input id="search-query" name="q" value="{h(query)}" placeholder="Введите запрос на русском языке" required autofocus>
 <button>Найти</button></form>'''
+    form += '''<div id="search-assist" class="assist-panel" aria-live="polite"><span class="muted">Начните вводить запрос — система покажет слова из индекса и подсказки.</span></div>
+<script>(function(){const input=document.getElementById('search-query'), box=document.getElementById('search-assist');let timer, serial=0;
+function render(data){if(!data.matched.length&&!data.suggestions.length){box.innerHTML='<span class="muted">Подсказок пока нет. Используйте русские термины из документов.</span>';return;}const missing=data.missing.length?'<span class="assist-warning">Не найдены: '+data.missing.join(', ')+'</span>':'';const suggestions=data.suggestions.length?'<div><strong>Возможные термины:</strong> '+data.suggestions.map(x=>'<button type="button" class="chip" data-term="'+x+'">'+x+'</button>').join(' ')+'</div>':'';box.innerHTML=missing+(data.matched.length?'<div><strong>В индексе:</strong> '+data.matched.join(', ')+'</div>':'')+suggestions;box.querySelectorAll('[data-term]').forEach(b=>b.addEventListener('click',()=>{input.value=(input.value+' '+b.dataset.term).trim();input.focus();}));}
+async function update(){const value=input.value.trim();if(!value){box.innerHTML='<span class="muted">Начните вводить запрос — система покажет слова из индекса и подсказки.</span>';return;}const current=++serial;try{const response=await fetch('/api/search-assist?q='+encodeURIComponent(value));const data=await response.json();if(current===serial)render(data);}catch(_){if(current===serial)box.innerHTML='<span class="muted">Подсказки временно недоступны.</span>';}}
+input.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(update,300);});update();})();</script>'''
     if not query:
         return page("Поиск документов", form + '<p class="muted">Откройте «Документы», чтобы добавить первые материалы.</p>', "search")
     results = lab1.search(query)
@@ -90,7 +95,8 @@ def search_page(query=""):
         source = (f' · <a href="{h(result["source_url"])}" target="_blank" rel="noopener">Исходная страница ↗</a>'
                   if result["source_url"] else "")
         cards.append(f'''<article class="card"><h2><a href="/document/{result["id"]}">{h(result["title"])}</a></h2>
-<p>{h(result["snippet"])}</p><p class="muted">Совпали слова: {h(", ".join(result["matched"]))} · Релевантность: {result["rank"]:.3f}{source}</p></article>''')
+<p>{h(result["snippet"])}</p><p class="muted">Совпали слова: {h(", ".join(result["matched"]))} · Релевантность: {result["rank"]:.3f}{source}</p>
+<details><summary>Почему этот документ найден</summary><div class="table-scroll"><table><tr><th>Термин</th><th>TF</th><th>IDF</th><th>Вклад</th></tr>{"".join(f'<tr><td>{h(item["term"])}</td><td>{item["tf"]}</td><td>{item["idf"]:.3f}</td><td>{item["contribution"]:.3f}</td></tr>' for item in result["contributions"])}</table></div></details></article>''')
     cards.append('<p><a href="/metrics">Оценить качество поиска на тестовой коллекции →</a></p>')
     return page("Поиск документов", form + "".join(cards), "search")
 
@@ -104,13 +110,18 @@ def documents_page():
                     for doc in documents)
     return page("Документы", '''<h2>Импорт интернет-страницы</h2>
 <form method="post" action="/import" class="row"><input name="url" type="url" placeholder="https://example.org/page" required><button>Импортировать</button></form>
-<h2>Добавить текст</h2><form method="post" action="/documents"><label>Заголовок<input name="title" required></label>
+<h2>Добавить текст</h2><form id="document-form" method="post" action="/documents"><label>Заголовок<input name="title" required></label>
 <label>Адрес источника, если есть<input name="source_url" type="url"></label>
 <label>Выбрать пример или свой TXT-файл<input id="document-file" type="file" accept=".txt,.md,text/plain"></label>
-<label>Текст<textarea name="body" rows="8" required></textarea></label><button>Добавить документ</button></form>
+<label>Текст<textarea id="document-body" name="body" rows="8" required></textarea></label><button>Добавить документ</button></form>
+<section id="index-preview" class="assist-panel"><h3>Предпросмотр интеллектуального индексирования</h3><p class="muted">Введите текст или выберите файл — здесь появится поисковый образ документа до сохранения.</p></section>
 <script>document.getElementById('document-file').addEventListener('change',async e=>{const file=e.target.files[0];
 if(file){document.querySelector('[name=body]').value=await file.text();
-const title=document.querySelector('[name=title]');if(!title.value)title.value=file.name.replace(/\\.[^.]+$/,'');}})</script>
+const title=document.querySelector('[name=title]');if(!title.value)title.value=file.name.replace(/\\.[^.]+$/,'');document.querySelector('#document-body').dispatchEvent(new Event('input'));}});
+(function(){const body=document.getElementById('document-body'),title=document.querySelector('[name=title]'),box=document.getElementById('index-preview');let timer,serial=0;
+function render(data){box.innerHTML='<h3>Поисковый образ документа</h3><div class="result-meta"><span>'+data.characters+' символов</span><span>'+data.words+' слов</span><span>'+data.unique_terms+' уникальных терминов</span><span>'+data.removed_words+' стоп-слов/служебных слов исключено</span></div><p class="muted">Документ будет сравниваться с коллекцией из '+data.collection_size+' документов после сохранения.</p><div class="table-scroll"><table><tr><th>Термин</th><th>TF</th><th>IDF</th><th>Вес</th></tr>'+data.terms.map(item=>'<tr><td><strong>'+item.term+'</strong></td><td>'+item.tf+'</td><td>'+item.idf.toFixed(3)+'</td><td>'+item.weight.toFixed(3)+'</td></tr>').join('')+'</table></div>'+(data.terms.length?'<p class="success">Индексация готова к подтверждению. Нажмите «Добавить документ», чтобы сохранить документ и его термы.</p>':'');}
+async function update(){const value=body.value.trim();if(value.length<20){box.innerHTML='<h3>Предпросмотр интеллектуального индексирования</h3><p class="muted">Введите не менее 20 символов, чтобы увидеть термы и их веса.</p>';return;}const current=++serial;box.innerHTML='<h3>Анализ документа…</h3><p class="muted">Строю поисковый образ без записи в базу.</p>';try{const response=await fetch('/api/documents/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title.value,body:value})});const data=await response.json();if(current===serial){if(!response.ok)throw new Error(data.error||'Не удалось проанализировать текст');render(data);}}catch(error){if(current===serial)box.innerHTML='<h3>Предпросмотр индексирования</h3><p class="alert">'+error.message+'</p>';}}
+function schedule(){clearTimeout(timer);timer=setTimeout(update,350);}body.addEventListener('input',schedule);title.addEventListener('input',schedule);})();</script>
 <h2>Коллекция</h2>''' + (cards or '<p class="muted">Документов пока нет.</p>'), "documents")
 
 
@@ -389,6 +400,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def send_json(self, payload, status=200):
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def redirect(self, destination):
         self.send_response(303)
         self.send_header("Location", destination)
@@ -406,7 +425,9 @@ class Handler(BaseHTTPRequestHandler):
         route = urlparse(self.path)
         parameters = parse_qs(route.query)
         query = parameters.get("q", [""])[0].strip()
-        if route.path == "/static/style.css":
+        if route.path == "/api/search-assist":
+            self.send_json(lab1.search_assist(query))
+        elif route.path == "/static/style.css":
             data = (Path(__file__).with_name("static") / "style.css").read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/css; charset=utf-8")
@@ -492,6 +513,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(error_page("Данные больше 2 МБ"), 413)
             return
         raw = self.rfile.read(length)
+        if self.path == "/api/documents/analyze":
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("Ожидается объект с полями title и body")
+                result = lab1.index_preview(str(payload.get("title", "")), str(payload.get("body", "")))
+                self.send_json(result)
+            except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+                self.send_json({"error": str(exc)}, 400)
+            return
         if self.path == "/language/upload":
             try:
                 items = json.loads(raw)

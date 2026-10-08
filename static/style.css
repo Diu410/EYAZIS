@@ -53,6 +53,12 @@ button:disabled{opacity:.55;cursor:default}
 .alert,.success{border-radius:10px;padding:14px 17px;margin:16px 0}
 .alert{background:#fff0ec;border:1px solid #efb7a8;color:#743a2e}
 .success{background:#e8f7ee;border:1px solid #afdac0;color:#225941}
+.assist-panel{background:#f8fcfc;border:1px solid #c5e1e3;border-radius:11px;padding:16px 18px;margin:16px 0;color:#294c56}
+.assist-panel h3{font-size:1rem;margin:0 0 9px;color:#075f6b}
+.assist-panel div{margin:7px 0}
+.assist-warning{display:block;color:#8a4b35;margin-bottom:8px}
+.chip{display:inline-flex;background:#e6f3f4;color:#176271;border:1px solid #b6dadd;padding:4px 9px;margin:2px 0;border-radius:999px;font-size:.88rem;font-weight:650}
+.chip:hover{background:#d1ebed;color:#075b67}
 .prose{white-space:normal;line-height:1.8}
 .source-text{white-space:pre-wrap;max-height:450px;overflow:auto;margin-top:17px}
 .table-scroll{overflow-x:auto}
