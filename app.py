@@ -22,6 +22,8 @@ from lab3.summarizer import load_reference_documents
 from lab4 import translation as lab4
 from lab4 import server as lab4_server
 from lifecycle import watch_parent
+from speech import routes as speech_routes
+from speech import storage as speech_storage
 
 recognizer = None
 
@@ -46,6 +48,9 @@ def page(title, content, active="home"):
         ("Лабораторная 2", [("language", "Язык текста", "/language")]),
         ("Лабораторная 3", [("summary", "Реферирование", "/summary")]),
         ("Лабораторная 4", [("translation", "Перевод", "/translation"), ("dictionary", "Словарь", "/translation/dictionary")]),
+        ("Лабораторная 5", [("speech5", "Фонетика речи", "/speech/5")]),
+        ("Лабораторная 6", [("speech6", "Просодика речи", "/speech/6")]),
+        ("Лабораторная 7", [("speech7", "Синтез речи", "/speech/7")]),
         ("Справка", [("help", "Помощь", "/help")]),
     ]
     links = "".join(
@@ -57,10 +62,12 @@ def page(title, content, active="home"):
     section = {"home": "Обзор", "search": "Лабораторная 1", "documents": "Лабораторная 1",
                "metrics": "Лабораторная 1", "language": "Лабораторная 2",
                "summary": "Лабораторная 3", "translation": "Лабораторная 4", "dictionary": "Лабораторная 4", "help": "Справка"}.get(active, "Рабочее место")
+    if active.startswith("speech"):
+        section = "Лабораторная " + active.removeprefix("speech")
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{h(title)} — EYAZIS</title><link rel="stylesheet" href="/static/style.css"></head>
 <body><header class="topbar"><div class="wrap topbar-inner"><a class="brand" href="/">EYAZIS<span class="brand-dot">.</span></a>
-<span class="topbar-caption">Информационный поиск и обработка текста</span><span class="variant">Вариант 4</span></div></header>
+<span class="topbar-caption">Информационный поиск, обработка текста и речи</span><span class="variant">Вариант 4</span></div></header>
 <div class="wrap layout"><nav aria-label="Разделы приложения">{links}</nav>
 <main><div class="page-heading"><span class="eyebrow">{section}</span><h1>{h(title)}</h1></div>{content}</main></div></body></html>'''
 
@@ -69,7 +76,7 @@ def home_page():
     document_count = len(lab1.list_documents())
     language_count = len(lab2.all_results())
     summary_count = len(lab3_store.all_summaries())
-    content = f'''<p class="lead">Четыре лабораторные работы в одном локальном приложении. Выберите нужный раздел в боковом меню.</p>
+    content = f'''<p class="lead">Семь лабораторных работ в одном локальном приложении. Выберите нужный раздел в боковом меню.</p>
 <div class="overview-grid">
 <a class="overview-card" href="/search"><span class="work-number">01 / Информационный поиск</span><strong>Поиск документов</strong>
 <span>Векторная модель, TF·IDF и оценка качества выдачи.</span><em>{document_count} документов →</em></a>
@@ -78,6 +85,9 @@ def home_page():
 <a class="overview-card" href="/summary"><span class="work-number">03 / Реферирование</span><strong>Реферат документа</strong>
 <span>Генеративный реферат с Qwen, экстрактивный метод и ключевые слова.</span><em>{summary_count} рефератов →</em></a>
 <a class="overview-card" href="/translation"><span class="work-number">04 / Машинный перевод</span><strong>Английский → немецкий</strong><span>Перевод, частотный словарь и синтаксический разбор.</span><em>Открыть →</em></a>
+<a class="overview-card" href="/speech/5"><span class="work-number">05 / Фонетика</span><strong>Звуки русской речи</strong><span>Микрофон, осциллограммы, фонемы и качество записи.</span><em>Открыть →</em></a>
+<a class="overview-card" href="/speech/6"><span class="work-number">06 / Просодика</span><strong>Ударение и интонация</strong><span>Монтаж слов, основной тон, громкость и длительность.</span><em>Открыть →</em></a>
+<a class="overview-card" href="/speech/7"><span class="work-number">07 / Синтез речи</span><strong>Собрать фразу из звуков</strong><span>База фонем и слогов, склейка и сравнение с эталоном.</span><em>Открыть →</em></a>
 </div><div class="card"><h2>Как работать</h2><p>Выберите раздел слева. Из документов первых двух работ можно сразу перейти к реферированию. Каждый результат третьей работы сохраняется в SQLite и доступен для печати или скачивания.</p></div>'''
     return page("Лабораторные работы", content, "home")
 
@@ -264,6 +274,35 @@ def help_page():
 <li>Выберите метод, русский или немецкий язык и при необходимости предметную область. Генеративный метод использует локальную Qwen 3.5 4B через Ollama и формулирует связный реферат своими словами. Экстрактивный метод выбирает предложения исходника по TF·IDF.</li>
 <li>Перед генерацией запустите Ollama; модель qwen3.5:4b должна быть видна в ollama list. Первая генерация может занять больше времени из-за загрузки модели. Длинные тексты сжимаются по частям, затем объединяются в общий реферат.</li>
 <li>Оба метода показывают ключевые слова с весами TF·IDF исходного документа. Результат можно скачать, распечатать или удалить. Ссылка «Открыть исходный документ» ведёт на сохранённую копию текста. Для демонстрации используйте тестовую коллекцию; короткий текст при экстрактивном методе почти не сокращается.</li></ol>
+<h2><a href="/translation">Лабораторная 4 — машинный перевод</a></h2>
+<p>Перевод английского текста на немецкий с учётом предметной области: информатика или литература.
+Исходный текст вводится в форме или загружается из TXT-файла; ограничение — 8000 символов.</p>
+<p>Результат содержит перевод и частотный словарь английских слов: число употреблений, переводные соответствия,
+грамматические теги и их расшифровки. Накопленный <a href="/translation/dictionary">словарь</a> сохраняется в SQLite;
+его записи доступны для редактирования.</p>
+<p>Для выбранного предложения строится синтаксическое дерево зависимостей с обозначением слов, частей речи и связей.
+Разбор выполняется локально и отдельно от генерации перевода. Результат перевода доступен для печати и скачивания в TXT.</p>
+<h2><a href="/speech/5">Лабораторная 5 — фонетика речи</a></h2>
+<p>Исследование частоты дискретизации и разрядности, гласных и согласных, коартикуляции и различий между дикторами.
+Результаты включают осциллограммы, отдельные периоды гласных, циклические фрагменты согласных и сравнение твёрдых и мягких согласных в слогах.
+Восемь форматов качества получены пересчётом одной исходной записи: 4, 8, 16 и 32 кГц при разрядности 8 и 16 бит.</p>
+<h2><a href="/speech/6">Лабораторная 6 — просодика речи</a></h2>
+<p>Семь групп опытов: шесть перестановок отдельно записанных слов, фразовое ударение,
+четыре интонационных варианта, эмоциональная окраска и обработка просодии каждого из трёх слов фразы «Студент писал реферат».
+Pitch Bend изменяет тон вместе с длительностью, Pitch Shift сохраняет длительность слова.
+Промежуточные этапы изменения тона, усиления и длительности включены в материалы отчёта.</p>
+<h2><a href="/speech/7">Лабораторная 7 — компиляционный синтез</a></h2>
+<p>Пять фраз представлены естественными эталонами, фонемной компиляцией, обработкой фонемных стыков,
+слоговой компиляцией и её вариантом с изменённой просодией. Фонемная база построена на материале лабораторной 5;
+слоги записаны независимо от эталонных фраз. Для каждой фразы приведена учебная транскрипция.</p>
+<h2>Измерения и отчёты лабораторных 5–7</h2>
+<p><strong>F₀</strong> — оценка частоты основного тона в герцах; в таблице показана медиана уверенных оценок.
+Знак «—» означает отсутствие такой оценки. <strong>RMS</strong> — среднеквадратический уровень нормированного сигнала.
+Длительность указана в секундах, частота дискретизации — в герцах, разрядность PCM — в битах.</p>
+<p>Флажки в таблице задают записи для графиков. Осциллограммы и контуры отображаются в общей шкале времени и амплитуды для выбранных вариантов.
+Слуховая оценка сохраняется вместе с результатами опыта. Границы сегментов приближённые; различия в разборчивости и естественности отражены в выводах.</p>
+<p>«Отчёт ZIP» содержит HTML-отчёт, аудио WAV, осциллограммы и контуры SVG, измерения CSV,
+разметку и параметры обработки в JSON. Исходные записи и промежуточные обработки сохраняются вместе с результатами.</p>
 <p>Приложение запускается локально. Данные и оценки хранятся в SQLite рядом с программой.</p>''', "help")
 
 
@@ -520,9 +559,11 @@ class Handler(BaseHTTPRequestHandler):
         route = urlparse(self.path)
         parameters = parse_qs(route.query)
         query = parameters.get("q", [""])[0].strip()
+        if speech_routes.get(self, route, parameters, page):
+            return
         if route.path == "/api/search-assist":
             self.send_json(lab1.search_assist(query))
-        elif route.path in ("/static/style.css", "/static/translation-tree.js"):
+        elif route.path in ("/static/style.css", "/static/translation-tree.js", "/static/speech-results.js", "/static/speech.css"):
             data = (Path(__file__).with_name("static") / route.path.rsplit('/', 1)[-1]).read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/css; charset=utf-8" if route.path.endswith('.css') else "text/javascript; charset=utf-8")
@@ -633,6 +674,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(error_page("Страница не найдена"), 404)
 
     def do_POST(self):
+        if self.path.startswith("/api/speech/"):
+            speech_routes.post(self)
+            return
         length = int(self.headers.get("Content-Length", "0"))
         if length > 2_000_000:
             self.send_html(error_page("Данные больше 2 МБ"), 413)
@@ -735,6 +779,7 @@ def run(port=8765):
             lab2.initialize()
             lab3_store.initialize()
             lab4.initialize()
+            speech_storage.initialize()
             lab4_server.start()
             print(f"Откройте http://127.0.0.1:{http_server.server_port}", flush=True)
             http_server.serve_forever(poll_interval=0.2)

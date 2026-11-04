@@ -22,6 +22,7 @@ app.initialize = lambda: None
 app.lab2.initialize = lambda: None
 app.lab3_store.initialize = lambda: None
 app.lab4.initialize = lambda: None
+app.speech_storage.initialize = lambda: None
 def model():
     server._job = ChildProcessJob()
     server._process = subprocess.Popen([sys._base_executable, '-B', '-c', 'import time; time.sleep(120)'])

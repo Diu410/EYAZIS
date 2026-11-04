@@ -7,3 +7,4 @@ __pycache__/
 ~$*.docx
 .DS_Store
 Thumbs.db
+.speech-backups/
