@@ -1,0 +1,102 @@
+[
+  {
+    "file": "sample_ru_computer_science.txt",
+    "language": "ru",
+    "summary_sentences": [
+      "Работа исследует число сравнений при линейном и двоичном поиске в упорядоченном массиве целых чисел.",
+      "Двоичный поиск проверяет средний элемент диапазона и исключает половину оставшихся кандидатов.",
+      "В эксперименте используются массивы последовательных целых чисел длиной 16, 64, 256 и 1024 элемента.",
+      "Линейный поиск потребовал 16, 64, 256 и 1024 проверки, а двоичный поиск потребовал 5, 7, 9 и 11 проверок.",
+      "Стоимость предварительной сортировки необходимо учитывать отдельно от стоимости одного поискового запроса.",
+      "Ограничение исследования связано с искусственными целочисленными данными и одним основным сценарием.",
+      "Двоичный поиск сокращает число проверок для большого упорядоченного массива, но требует соблюдения предпосылки сортировки."
+    ],
+    "keywords": [
+      "поиск",
+      "массива",
+      "сравнений",
+      "элементов",
+      "двоичный",
+      "линейный",
+      "сортировки",
+      "затрат",
+      "запросов",
+      "проверок"
+    ]
+  },
+  {
+    "file": "sample_ru_literature.txt",
+    "language": "ru",
+    "summary_sentences": [
+      "Роман Достоевского «Преступление и наказание» раскрывает связь личной свободы с ответственностью перед другим человеком.",
+      "Теория Раскольникова делит людей на подчинённых закону и тех, кто будто бы вправе переступить через него ради великой цели.",
+      "Преступление не приносит Раскольникову независимости и усиливает его внутреннее одиночество.",
+      "Образ Сони противопоставляет оправданию насилия внимание к конкретному страдающему человеку.",
+      "Признание вины открывает возвращение к людям, хотя ещё не завершает нравственное изменение героя.",
+      "Свобода в романе связана со способностью признать другого человека самостоятельной ценностью.",
+      "Достоевский показывает несостоятельность свободы, построенной на отрицании чужого достоинства."
+    ],
+    "keywords": [
+      "раскольникова",
+      "ответственности",
+      "свободы",
+      "преступление",
+      "теории",
+      "героя",
+      "человека",
+      "наказание",
+      "достоевский",
+      "сони"
+    ]
+  },
+  {
+    "file": "sample_de_computer_science.txt",
+    "language": "de",
+    "summary_sentences": [
+      "Diese Untersuchung vergleicht die Anzahl der Prüfungen bei linearer und binärer Suche in einem sortierten Feld ganzer Zahlen.",
+      "Die binäre Suche prüft die Mitte des aktuellen Bereichs und schließt anschließend eine Hälfte der Kandidaten aus.",
+      "Im Experiment werden Felder mit 16, 64, 256 und 1024 aufeinanderfolgenden ganzen Zahlen verwendet.",
+      "Die lineare Suche benötigt 16, 64, 256 und 1024 Prüfungen, die binäre Suche dagegen 5, 7, 9 und 11 Prüfungen.",
+      "Die Kosten einer vorgeschalteten Sortierung müssen getrennt von den Kosten einer einzelnen Anfrage bewertet werden.",
+      "Die Aussagekraft des Experiments ist durch künstliche Ganzzahldaten und einen einzelnen Hauptfall begrenzt.",
+      "Die binäre Suche reduziert die Zahl der Prüfungen in großen sortierten Feldern, setzt jedoch eine passende Ordnung voraus."
+    ],
+    "keywords": [
+      "suche",
+      "prüfungen",
+      "elemente",
+      "sortierung",
+      "aufwand",
+      "verfahren",
+      "kosten",
+      "feldgröße",
+      "binäre",
+      "lineare"
+    ]
+  },
+  {
+    "file": "sample_de_literature.txt",
+    "language": "de",
+    "summary_sentences": [
+      "Dostojewskis Roman Schuld und Sühne untersucht die Verbindung zwischen persönlicher Freiheit und Verantwortung gegenüber anderen Menschen.",
+      "Raskolnikows Theorie unterscheidet gewöhnliche Menschen von außergewöhnlichen Personen, die für ein großes Ziel das Gesetz verletzen dürfen.",
+      "Das Verbrechen führt nicht zur Unabhängigkeit, sondern verstärkt Raskolnikows Einsamkeit und seine Abhängigkeit von Angst.",
+      "Sonjas Anteilnahme stellt der Rechtfertigung von Gewalt die Aufmerksamkeit für einen leidenden Menschen gegenüber.",
+      "Das Eingeständnis der Schuld eröffnet eine Rückkehr zu anderen Menschen, beendet die innere Veränderung aber nicht automatisch.",
+      "Freiheit erscheint im Roman als Fähigkeit, einen anderen Menschen als eigenständigen Wert anzuerkennen.",
+      "Dostojewski zeigt das Scheitern einer Freiheit, die auf der Verneinung fremder Würde aufgebaut ist."
+    ],
+    "keywords": [
+      "raskolnikows",
+      "verantwortung",
+      "freiheit",
+      "verbrechen",
+      "theorie",
+      "menschen",
+      "schuld",
+      "strafe",
+      "sonjas",
+      "dostojewski"
+    ]
+  }
+]

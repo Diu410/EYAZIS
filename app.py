@@ -7,15 +7,21 @@ import argparse
 import csv
 import io
 import json
+import socket
+import signal
 from pathlib import Path
 
 from db import initialize
 from lab1 import search as lab1
 from lab1 import benchmark as lab1_benchmark
 from lab2 import language as lab2
-from lab3 import summarize, save_to_ostis
+from lab3 import GenerativeError, summarize
 from lab3 import storage as lab3_store
 from lab3.prepare_corpus import ROOT as SUMMARY_CORPUS_ROOT
+from lab3.summarizer import load_reference_documents
+from lab4 import translation as lab4
+from lab4 import server as lab4_server
+from lifecycle import watch_parent
 
 recognizer = None
 
@@ -39,6 +45,7 @@ def page(title, content, active="home"):
                               ("metrics", "Оценка поиска", "/metrics")]),
         ("Лабораторная 2", [("language", "Язык текста", "/language")]),
         ("Лабораторная 3", [("summary", "Реферирование", "/summary")]),
+        ("Лабораторная 4", [("translation", "Перевод", "/translation"), ("dictionary", "Словарь", "/translation/dictionary")]),
         ("Справка", [("help", "Помощь", "/help")]),
     ]
     links = "".join(
@@ -49,7 +56,7 @@ def page(title, content, active="home"):
     )
     section = {"home": "Обзор", "search": "Лабораторная 1", "documents": "Лабораторная 1",
                "metrics": "Лабораторная 1", "language": "Лабораторная 2",
-               "summary": "Лабораторная 3", "help": "Справка"}.get(active, "Рабочее место")
+               "summary": "Лабораторная 3", "translation": "Лабораторная 4", "dictionary": "Лабораторная 4", "help": "Справка"}.get(active, "Рабочее место")
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{h(title)} — EYAZIS</title><link rel="stylesheet" href="/static/style.css"></head>
 <body><header class="topbar"><div class="wrap topbar-inner"><a class="brand" href="/">EYAZIS<span class="brand-dot">.</span></a>
@@ -62,20 +69,59 @@ def home_page():
     document_count = len(lab1.list_documents())
     language_count = len(lab2.all_results())
     summary_count = len(lab3_store.all_summaries())
-    content = f'''<p class="lead">Три лабораторные работы в одном локальном приложении. Данные поиска, распознавания языка и рефераты доступны из бокового меню.</p>
+    content = f'''<p class="lead">Четыре лабораторные работы в одном локальном приложении. Выберите нужный раздел в боковом меню.</p>
 <div class="overview-grid">
 <a class="overview-card" href="/search"><span class="work-number">01 / Информационный поиск</span><strong>Поиск документов</strong>
 <span>Векторная модель, TF·IDF и оценка качества выдачи.</span><em>{document_count} документов →</em></a>
 <a class="overview-card" href="/language"><span class="work-number">02 / Анализ текста</span><strong>Распознавание языка</strong>
 <span>Русский и немецкий HTML: N-граммы, алфавит, нейросеть.</span><em>{language_count} результатов →</em></a>
 <a class="overview-card" href="/summary"><span class="work-number">03 / Реферирование</span><strong>Реферат документа</strong>
-<span>Предложения, ключевые слова, веса и необязательная запись в OSTIS.</span><em>{summary_count} рефератов →</em></a>
+<span>Генеративный реферат с Qwen, экстрактивный метод и ключевые слова.</span><em>{summary_count} рефератов →</em></a>
+<a class="overview-card" href="/translation"><span class="work-number">04 / Машинный перевод</span><strong>Английский → немецкий</strong><span>Перевод, частотный словарь и синтаксический разбор.</span><em>Открыть →</em></a>
 </div><div class="card"><h2>Как работать</h2><p>Выберите раздел слева. Из документов первых двух работ можно сразу перейти к реферированию. Каждый результат третьей работы сохраняется в SQLite и доступен для печати или скачивания.</p></div>'''
     return page("Лабораторные работы", content, "home")
 
 
 def error_page(message):
     return page("Ошибка", f'<div class="alert">{h(message)}</div><p><a href="/">На главную</a></p>')
+
+
+def translation_page():
+    return page('Англо-немецкий перевод', '''<p class="lead">Перевод, частотный словарь и синтаксический разбор с помощью локальной модели llama.cpp. Результаты модели могут содержать ошибки.</p>
+<form method="post" action="/translation/create" id="translation-form"><label>Предметная область<select name="subject"><option value="computer science">Computer science</option><option value="literature">Литература</option></select></label>
+<label>Загрузить TXT<input type="file" accept=".txt,text/plain" id="translation-file"></label>
+<label>Английский текст<textarea name="text" id="translation-text" rows="10" required maxlength="8000">The algorithm processes data and produces a result. The computer stores the information in memory.</textarea></label>
+<button id="translation-submit">Перевести</button><p id="translation-wait" class="muted" hidden>Модель переводит текст и составляет словарь. Дождитесь результата. Дерево выбранного предложения можно построить после перевода.</p></form><p>Ограничение текста — 8000 символов.</p>
+<script>document.getElementById('translation-file').onchange=async e=>{if(e.target.files[0])document.getElementById('translation-text').value=await e.target.files[0].text()};document.getElementById('translation-form').addEventListener('submit',()=>{document.getElementById('translation-wait').hidden=false;document.getElementById('translation-submit').disabled=true;});</script>''', 'translation')
+
+
+def translation_result(result_id, data):
+    warnings = ''.join(f'<p class="alert">{h(message)}</p>' for message in data.get('warnings', []))
+    rows = ''.join(f'<tr><td>{h(r["word"])}</td><td>{r["frequency"]}</td><td>{h(r["translation"] or "не определён")}</td><td>{h(r["tag"])}</td><td>{h(r["description"])}</td></tr>' for r in data['words'])
+    sentences = data.get('sentences', [])
+    options = ''.join(f'<option value="{i}">{h(item["sentence"])}</option>' for i,item in enumerate(sentences))
+    selected = min(max(int(data.get('selected_sentence', 0)), 0), max(len(sentences)-1, 0))
+    sentence = h(sentences[selected]['sentence']) if sentences else ''
+    selector = f'<label>Предложение<select id="sentence-choice">{options}</select></label>' if sentences else ''
+    tree_json = json.dumps({'resultId': result_id, 'selected': selected, 'sentences': sentences}, ensure_ascii=False).replace('<', '\\u003c')
+    return page('Результат перевода', f'''<p><a href="/translation">← Новый перевод</a> · <a href="/translation/export/{result_id}">Скачать TXT</a> · <a href="#" onclick="window.print();return false">Печать</a></p>
+{warnings}<p class="muted">Модель: {h(data['model'])}. Всего слов: {data['total']}; с переводными соответствиями: {data['translated']}.</p>
+<div class="card"><h2>Исходный текст</h2><p style="white-space:pre-wrap">{h(data['source'])}</p><h2>Перевод</h2><p style="white-space:pre-wrap">{h(data['translation'])}</p></div>
+<div class="card"><details open><summary>Вкладка 1 — частотный словарь и части речи</summary><div class="table-scroll"><table><tr><th>Слово</th><th>Частота</th><th>Перевод</th><th>Тег</th><th>Расшифровка</th></tr>{rows}</table></div></details>
+<details id="syntax-panel"><summary>Вкладка 2 — синтаксический разбор</summary>{selector}<button type="button" id="build-tree">Построить дерево</button><p id="tree-sentence">{sentence}</p>
+<p class="muted">Корень предложения находится наверху. Линии соединяют главное слово с зависимыми; подписи обозначают синтаксические отношения, а теги под словами — части речи.</p>
+<p id="tree-status" role="status"></p>
+<div id="tree-controls" class="tree-controls" hidden><label>Масштаб <input id="tree-scale" type="range" min="20" max="150" value="100"> <output id="tree-scale-value">100%</output></label><button type="button" id="tree-fit" class="secondary small">Вписать в окно</button></div>
+<div id="sentence-tree" class="syntax-tree" tabindex="0" aria-label="Дерево синтаксических зависимостей" hidden></div>
+<details id="tree-text-panel" hidden><summary>Текстовая версия для копирования</summary><pre id="sentence-tree-text"></pre></details>
+</details></div>
+<script id="syntax-data" type="application/json">{tree_json}</script><script src="/static/translation-tree.js" defer></script>''', 'translation')
+
+
+def translation_dictionary():
+    rows = ''.join(f'<tr><td>{h(r["word"])}</td><td>{h(r["translation"])}</td><td>{h(r["tag"])}</td><td>{h(r["description"])}</td></tr>' for r in lab4.dictionary())
+    return page('Словарь переводов', '''<p>Словарь автоматически пополняется при анализе. Существующие записи сохраняются; для исправления введите слово повторно.</p>
+<form method="post" action="/translation/dictionary"><label>Английское слово<input name="word" required></label><label>Немецкий перевод<input name="translation" required></label><label>Тег части речи<input name="tag" required></label><label>Расшифровка<input name="description" required></label><button>Добавить или исправить</button></form>''' + f'<div class="table-scroll"><table><tr><th>Слово</th><th>Перевод</th><th>Тег</th><th>Расшифровка</th></tr>{rows}</table></div>', 'dictionary')
 
 
 def search_page(query=""):
@@ -215,8 +261,9 @@ def help_page():
 <li>Для оценки точности укажите известный язык. Просмотрите результаты каждого метода и среднее время.</li>
 <li>Сохраните CSV или нажмите «Распечатать».</li></ol>
 <h2>Лабораторная 3 — реферирование</h2><ol><li>Откройте «Реферирование» и вставьте текст либо загрузите TXT-файл. Можно начать со страницы документа первой или второй работы.</li>
-<li>Выберите русский или немецкий язык и при необходимости предметную область. Приложение выделит до десяти предложений, покажет ключевые слова и веса.</li>
-<li>Для наглядного реферата возьмите длинный текст тестовой коллекции. Короткий текст из трёх предложений почти не сокращается. Результат можно скачать, распечатать или удалить. Кнопка «Записать в OSTIS» работает, когда установлен py-sc-client и запущен sc-server.</li></ol>
+<li>Выберите метод, русский или немецкий язык и при необходимости предметную область. Генеративный метод использует локальную Qwen 3.5 4B через Ollama и формулирует связный реферат своими словами. Экстрактивный метод выбирает предложения исходника по TF·IDF.</li>
+<li>Перед генерацией запустите Ollama; модель qwen3.5:4b должна быть видна в ollama list. Первая генерация может занять больше времени из-за загрузки модели. Длинные тексты сжимаются по частям, затем объединяются в общий реферат.</li>
+<li>Оба метода показывают ключевые слова с весами TF·IDF исходного документа. Результат можно скачать, распечатать или удалить. Ссылка «Открыть исходный документ» ведёт на сохранённую копию текста. Для демонстрации используйте тестовую коллекцию; короткий текст при экстрактивном методе почти не сокращается.</li></ol>
 <p>Приложение запускается локально. Данные и оценки хранятся в SQLite рядом с программой.</p>''', "help")
 
 
@@ -271,7 +318,7 @@ def summary_samples():
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
-def summary_page(from_search="", from_language="", sample=""):
+def summary_page(from_search="", from_language="", sample="", form_values=None, error=""):
     title, document, language, source_url = "", "", "ru", ""
     item = None
     if from_search:
@@ -291,47 +338,67 @@ def summary_page(from_search="", from_language="", sample=""):
             return error_page("Пример документа не найден")
         title, language = item["title"], item["language"]
         document = (SUMMARY_CORPUS_ROOT / item["file"]).read_text(encoding="utf-8")
-        source_url = item["source_urls"][0]
+        source_url = next(iter(item.get("source_urls", [])), "")
+
+    values = form_values or {}
+    title = values.get("title", title)
+    document = values.get("document", document)
+    language = values.get("language", language)
+    source_url = values.get("source_url", source_url)
+    method = values.get("method", "generative")
+    subject_area = values.get("subject_area", item["subject_area"] if item else "")
 
     history = lab3_store.all_summaries()
     examples = "".join(f'''<a class="sample-card" href="/summary?sample={quote(item["file"])}">
-<strong>{h(item["title"])}</strong><span>{h(item["language"])} · {h(item["subject_area"])} · 20 000 знаков</span></a>'''
+<strong>{h(item["title"])}</strong><span>{h(item["language"])} · {h(item["subject_area"])} · {h(item.get("characters", ""))} знаков · {h(item.get("genre", ""))}</span></a>'''
                        for item in summary_samples())
     cards = "".join(f'''<div class="history-row"><a class="history-item" href="/summary/result/{row["id"]}">
-<span><strong>{h(row["title"])}</strong><small>{h(row["created_at"])}</small></span>
+<span><strong>{h(row["title"])}</strong><small>{h(row["created_at"])} · {"Генеративный" if row["method"] == "generative" else "Экстрактивный"}</small></span>
 <span class="history-arrow">→</span></a>
 <form method="post" action="/summary/delete" onsubmit="return confirm('Удалить реферат?')">
 <input type="hidden" name="id" value="{row["id"]}"><button class="danger small">Удалить</button></form></div>''' for row in history)
     short_source = ('<div class="alert">Этот исходный текст короткий. Методичка рекомендует выбирать около десяти предложений из большого документа; '
                     'для наглядного реферата возьмите один из текстов тестовой коллекции ниже.</div>'
                     if document and len(document) < 1000 else '')
-    form = f'''<p class="lead">Классический реферат здесь — это предложения исходного текста с наибольшим весом, сохранённые в исходном порядке. Методичка рекомендует около десяти предложений из большого документа.</p>{short_source}
+    error_notice = f'<div class="alert" role="alert">{h(error)}</div>' if error else ''
+    form = f'''<p class="lead">Генеративный метод с локальной Qwen 3.5 4B формулирует связный реферат своими словами. Экстрактивный метод выбирает наиболее весомые предложения исходного текста. Оба метода показывают ключевые слова с весами TF·IDF.</p>{error_notice}{short_source}
 <form method="post" action="/summary/create" id="summary-form" class="card form-card">
+<label>Метод реферирования<select name="method" id="summary-method"><option value="generative" {"selected" if method == "generative" else ""}>Генеративный — Qwen 3.5 4B</option>
+<option value="extractive" {"selected" if method == "extractive" else ""}>Экстрактивный — TF·IDF</option></select></label>
+<p class="muted" id="summary-method-help">Для генеративного метода запустите Ollama с установленной моделью qwen3.5:4b. Длинные документы обрабатываются по частям.</p>
 <div class="form-grid"><label>Название документа<input name="title" value="{h(title)}" placeholder="Например, статья об алгоритмах"></label>
 <label>Язык<select name="language"><option value="ru" {"selected" if language == "ru" else ""}>Русский</option>
 <option value="de" {"selected" if language == "de" else ""}>Немецкий</option></select></label></div>
-<label>Предметная область<input name="subject_area" list="subject-areas" placeholder="Например, computer science" value="{h(item["subject_area"] if sample and item else "")}"></label>
+<label>Предметная область<input name="subject_area" list="subject-areas" placeholder="Например, computer science" value="{h(subject_area)}"></label>
 <datalist id="subject-areas"><option value="computer science"><option value="литература"></datalist>
 <label>Ссылка на исходный документ<input name="source_url" value="{h(source_url)}" placeholder="URL или ссылка на документ в приложении"></label>
 <label>Текст документа<textarea name="document" id="summary-text" rows="13" required placeholder="Вставьте текст документа...">{h(document)}</textarea></label>
 <label class="upload-label">Загрузить текстовый файл (.txt, .md)<input id="summary-file" type="file" accept=".txt,.md,text/plain"></label>
-<div class="form-grid narrow"><label>Предложений в реферате<input name="max_sentences" type="number" min="1" max="30" value="10" required></label>
-<label>Ключевых слов<input name="max_keywords" type="number" min="1" max="50" value="20" required></label></div>
-<button>Построить реферат</button></form>
+<div class="form-grid narrow"><label>Максимум предложений<input name="max_sentences" type="number" min="1" max="30" value="{h(values.get('max_sentences', '10'))}" required></label>
+<label>Ключевых слов<input name="max_keywords" type="number" min="1" max="50" value="{h(values.get('max_keywords', '20'))}" required></label></div>
+<button id="summary-submit">Построить реферат</button><p class="muted" id="summary-status" role="status" aria-live="polite"></p></form>
 <script>document.getElementById('summary-file').addEventListener('change',async e=>{{const file=e.target.files[0];
 if(file){{document.getElementById('summary-text').value=await file.text();
-const title=document.querySelector('#summary-form [name=title]');if(!title.value)title.value=file.name;}}}})</script>
-<h2>Тестовая коллекция</h2><p class="muted">Для демонстрации реферирования используйте эти четыре текста по 20 000 знаков. Короткий текст из первой работы может содержать всего три предложения и почти не сокращается.</p>
+const title=document.querySelector('#summary-form [name=title]');if(!title.value)title.value=file.name;}}}});
+const methodSelect=document.getElementById('summary-method');
+function updateMethodHelp(){{document.getElementById('summary-method-help').textContent=methodSelect.value==='generative'?'Для генеративного метода запустите Ollama с установленной моделью qwen3.5:4b. Длинные документы обрабатываются по частям.':'Предложения выбираются по весам TF·IDF и сохраняются в исходном порядке. Для наглядного сокращения нужен длинный текст.';}}
+methodSelect.addEventListener('change',updateMethodHelp);updateMethodHelp();
+document.getElementById('summary-form').addEventListener('submit',()=>{{const button=document.getElementById('summary-submit');button.disabled=true;button.textContent='Обработка…';document.getElementById('summary-status').textContent=methodSelect.value==='generative'?'Qwen создаёт реферат. Дождитесь результата; первая загрузка модели может занять больше времени.':'Рассчитываются веса предложений…';}});
+window.addEventListener('pageshow',()=>{{const button=document.getElementById('summary-submit');button.disabled=false;button.textContent='Построить реферат';document.getElementById('summary-status').textContent='';}});</script>
+<h2>Тестовая коллекция</h2><p class="muted">Четыре учебных авторских текста по 4500 знаков: научные статьи об алгоритмах и литературные сочинения на русском и немецком. Материалы подготовлены с помощью ИИ; это не внешние публикации. Веса IDF вычисляются по полным документам выбранного языка.</p>
 <div class="sample-grid">{examples}</div>
 <h2>Сохранённые рефераты</h2>{cards or '<p class="muted">Рефератов пока нет.</p>'}'''
     return page("Реферирование документов", form, "summary")
 
 
-def summary_result_page(summary_id, ostis_status=""):
+def summary_result_page(summary_id):
     row = lab3_store.get(summary_id)
     if row is None:
         return error_page("Реферат не найден")
     result = row["result"]
+    generative = result.get("method") == "generative"
+    method_name = "Генеративный — Qwen" if generative else "Экстрактивный — TF·IDF"
+    summary_heading = "Генеративный реферат" if generative else "Классический реферат"
     source_sentence_count = len(result["sentence_scores"])
     summary_sentence_count = len(result["summary"])
     summary_char_count = sum(len(sentence) for sentence in result["summary"])
@@ -339,18 +406,33 @@ def summary_result_page(summary_id, ostis_status=""):
     source_url = row["source_url"]
     parsed = urlparse(source_url)
     safe_source = source_url.startswith(("/document/", "/language/document/")) or parsed.scheme in ("http", "https")
-    source = f'<a href="{h(source_url)}" target="_blank" rel="noopener">Открыть исходный документ ↗</a>' if source_url and safe_source else ""
-    notice = ('<div class="success">Результат записан в OSTIS.</div>' if ostis_status == "ok" else
-              '<div class="alert">Не удалось записать в OSTIS. Реферат сохранён локально; проверьте sc-server и py-sc-client.</div>'
-              if ostis_status == "fail" else "")
+    source = f'<a href="/summary/source/{summary_id}" target="_blank" rel="noopener">Открыть исходный документ ↗</a>'
+    if source_url and safe_source:
+        source += f' <a href="{h(source_url)}" target="_blank" rel="noopener">Внешний источник ↗</a>'
+    notice = ""
+    if not generative and result.get("algorithm_version") != 2:
+        notice += ('<div class="alert">Этот результат сохранён предыдущей версией алгоритма. '
+                   'Для расчёта по полным документам и обновлённым границам предложений постройте реферат заново.</div>')
     length_notice = (f'<div class="alert">Исходный текст содержит только {source_sentence_count} предложений. '
                      'Это слишком мало для содержательного сокращения: реферат почти повторяет оригинал. '
-                     'Для демонстрации возьмите текст из тестовой коллекции объёмом 20 000 знаков.</div>'
-                     if source_sentence_count <= summary_sentence_count else '')
+                     'Для демонстрации возьмите полный текст из тестовой коллекции объёмом 4500 знаков.</div>'
+                     if not generative and source_sentence_count <= summary_sentence_count else '')
     meta = f'''<div class="result-meta"><span>Язык: <strong>{h(result["language"])}</strong></span>
+<span>Метод: <strong>{method_name}</strong></span>
 <span>Область: <strong>{h(result.get("subject_area") or "не указана")}</strong></span>
-<span>Предложений в реферате: <strong>{summary_sentence_count} из {source_sentence_count}</strong></span>
-<span>Сокращение по символам: <strong>{compression:.0%}</strong></span></div>'''
+<span>Предложений в реферате: <strong>{summary_sentence_count}</strong></span>
+<span>Предложений в исходнике: <strong>{source_sentence_count}</strong></span>
+<span>Сокращение по символам: <strong>{compression:.0%}</strong></span>'''
+    generation_note = ""
+    if generative:
+        generation = result.get("generation", {})
+        meta += (f'<span>Модель: <strong>{h(result.get("model", ""))}</strong></span>'
+                 f'<span>Время генерации: <strong>{generation.get("elapsed_ms", 0) / 1000:.1f} с</strong></span>')
+        generation_note = '<p class="muted">Модель переформулирует содержание исходного текста. Ключевые слова и веса предложений ниже вычислены по исходнику методом TF·IDF.</p>'
+        if generation.get("strategy") == "map_reduce":
+            generation_note += (f'<p class="muted">Длинный документ обработан по частям: '
+                                f'{generation.get("source_chunks", 0)} фрагментов, затем общий реферат.</p>')
+    meta += '</div>'
     summary_text = h(" ".join(result["summary"]))
     keywords = "".join(f'<tr><td>{h(item["word"])}</td><td>{item["weight"]:.4f}</td></tr>'
                        for item in result["keywords"])
@@ -358,18 +440,15 @@ def summary_result_page(summary_id, ostis_status=""):
 <td>{item["score"]:.4f}</td><td>{item["lexical_score"]:.4f}</td>
 <td>{item["position_document"]:.3f}</td><td>{item["position_paragraph"]:.3f}</td></tr>'''
                      for item in result["sentence_scores"])
-    ostis_button = ("Уже записано в OSTIS" if row["ostis_saved"] else "Записать в OSTIS")
     content = f'''<p><a href="/summary">← К реферированию</a></p>{notice}{length_notice}{meta}
 <div class="actions">{source}<a href="/summary/export/{summary_id}.txt">Сохранить TXT</a>
 <a href="/summary/export/{summary_id}.json">Сохранить JSON</a>
 <button type="button" onclick="window.print()">Распечатать</button>
-<form method="post" action="/summary/ostis"><input type="hidden" name="id" value="{summary_id}">
-<button class="secondary" {"disabled" if row["ostis_saved"] else ""}>{ostis_button}</button></form>
 <form method="post" action="/summary/delete" onsubmit="return confirm('Удалить локальный реферат?')">
 <input type="hidden" name="id" value="{summary_id}"><button class="danger small">Удалить</button></form></div>
-<section class="card"><h2>Классический реферат</h2><p class="summary-prose">{summary_text}</p></section>
+<section class="card"><h2>{summary_heading}</h2><p class="summary-prose">{summary_text}</p>{generation_note}</section>
 <section class="card"><h2>Ключевые слова</h2><div class="table-scroll"><table><tr><th>Слово</th><th>Вес TF·IDF</th></tr>{keywords}</table></div></section>
-<details class="card"><summary>Веса всех предложений</summary><div class="table-scroll"><table>
+<details class="card"><summary>Веса всех предложений исходного документа</summary><div class="table-scroll"><table>
 <tr><th>№</th><th>Предложение</th><th>Итог</th><th>Лексический вес</th><th>Позиция в документе</th><th>Позиция в абзаце</th></tr>{scores}</table></div></details>
 <details class="card"><summary>Исходный текст</summary><div class="prose source-text">{h(result["document"])}</div></details>'''
     return page(row["title"], content, "summary")
@@ -379,16 +458,32 @@ def summary_export_text(row):
     result = row["result"]
     lines = [row["title"], f'Язык: {result["language"]}',
              f'Предметная область: {result.get("subject_area") or "не указана"}']
+    generative = result.get("method") == "generative"
+    lines.append('Метод: ' + ('генеративный' if generative else 'экстрактивный'))
+    if generative:
+        lines.append(f'Модель: {result.get("model", "")}')
+        lines.append(f'Время генерации: {result.get("generation", {}).get("elapsed_ms", 0) / 1000:.1f} с')
+    lines.append(f'Исходный документ: /summary/source/{row["id"]}')
     if row["source_url"]:
-        lines.append(f'Источник: {row["source_url"]}')
-    lines.extend(["", "Классический реферат"])
+        lines.append(f'Внешний источник: {row["source_url"]}')
+    lines.extend(["", "Генеративный реферат" if generative else "Классический реферат"])
     lines.append(" ".join(result["summary"]))
-    lines.extend(["", "Ключевые слова"])
+    lines.extend(["", "Ключевые слова исходного документа (TF·IDF)"])
     lines.extend(f'{item["word"]}: {item["weight"]:.6f}' for item in result["keywords"])
-    lines.extend(["", "Оценки предложений"])
+    lines.extend(["", "Оценки предложений исходного документа"])
     lines.extend(f'{item["index"] + 1}. {item["score"]:.6f} — {item["sentence"]}'
                  for item in result["sentence_scores"])
     return "\n".join(lines) + "\n"
+
+
+class ApplicationServer(ThreadingHTTPServer):
+    """Allow only one application instance to own the listening port."""
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.allow_reuse_address = False
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -427,10 +522,10 @@ class Handler(BaseHTTPRequestHandler):
         query = parameters.get("q", [""])[0].strip()
         if route.path == "/api/search-assist":
             self.send_json(lab1.search_assist(query))
-        elif route.path == "/static/style.css":
-            data = (Path(__file__).with_name("static") / "style.css").read_bytes()
+        elif route.path in ("/static/style.css", "/static/translation-tree.js"):
+            data = (Path(__file__).with_name("static") / route.path.rsplit('/', 1)[-1]).read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "text/css; charset=utf-8")
+            self.send_header("Content-Type", "text/css; charset=utf-8" if route.path.endswith('.css') else "text/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -438,6 +533,22 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(home_page())
         elif route.path == "/search":
             self.send_html(search_page(query))
+        elif route.path == "/translation":
+            self.send_html(translation_page())
+        elif route.path == "/translation/dictionary":
+            self.send_html(translation_dictionary())
+        elif route.path.startswith(("/translation/result/", "/translation/export/")):
+            try:
+                result_id = int(route.path.rsplit('/', 1)[-1])
+                result = lab4.get(result_id)
+                if result is None:
+                    self.send_html(error_page('Результат не найден'), 404)
+                elif route.path.startswith('/translation/export/'):
+                    self.send_download(('\ufeff' + lab4.export(result)).encode('utf-8'), f'translation_{result_id}.txt', 'text/plain; charset=utf-8')
+                else:
+                    self.send_html(translation_result(result_id, result))
+            except ValueError:
+                self.send_html(error_page('Неверный номер результата'), 400)
         elif route.path == "/documents":
             self.send_html(documents_page())
         elif route.path.startswith("/document/"):
@@ -476,10 +587,21 @@ class Handler(BaseHTTPRequestHandler):
                                             parameters.get("sample", [""])[0]))
             except ValueError:
                 self.send_html(error_page("Неверный номер исходного документа"), 400)
+        elif route.path.startswith("/summary/source/"):
+            try:
+                summary_id = int(route.path.rsplit("/", 1)[-1])
+                row = lab3_store.get(summary_id)
+                if row is None:
+                    self.send_html(error_page("Исходный документ не найден"), 404)
+                    return
+                content = (f'<p><a href="/summary/result/{summary_id}">← К реферату</a></p>'
+                           f'<article class="card prose source-text" style="white-space:pre-wrap">{h(row["result"]["document"])}</article>')
+                self.send_html(page(row["title"] + " — исходный документ", content, "summary"))
+            except ValueError:
+                self.send_html(error_page("Неверный номер исходного документа"), 400)
         elif route.path.startswith("/summary/result/"):
             try:
-                self.send_html(summary_result_page(int(route.path.rsplit("/", 1)[-1]),
-                                                   parameters.get("ostis", [""])[0]))
+                self.send_html(summary_result_page(int(route.path.rsplit("/", 1)[-1])))
             except ValueError:
                 self.send_html(error_page("Неверный номер реферата"), 400)
         elif route.path.startswith("/summary/export/"):
@@ -497,7 +619,10 @@ class Handler(BaseHTTPRequestHandler):
                     data = ("\ufeff" + summary_export_text(row)).encode("utf-8")
                     content_type = "text/plain; charset=utf-8"
                 else:
-                    data = json.dumps(row["result"], ensure_ascii=False, indent=2).encode("utf-8")
+                    payload = {**row["result"], "title": row["title"],
+                               "original_document_url": f'/summary/source/{summary_id}',
+                               "source_url": row["source_url"]}
+                    data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
                     content_type = "application/json; charset=utf-8"
                 self.send_download(data, f"summary_{summary_id}.{extension}", content_type)
             except ValueError:
@@ -542,7 +667,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         form = {key: values[0] for key, values in parse_qs(raw.decode("utf-8")).items()}
         try:
-            if self.path == "/documents":
+            if self.path.startswith('/translation/tree/'):
+                try:
+                    result = lab4.parse_sentence(int(self.path.rsplit('/', 1)[-1]), int(form.get('index', '0')), include_nodes=True)
+                    self.send_json(result)
+                except ValueError as exc:
+                    self.send_json({'error': str(exc)}, 400)
+            elif self.path == '/translation/create':
+                result_id = lab4.analyze(form.get('text', ''), form.get('subject', ''))
+                self.redirect(f'/translation/result/{result_id}')
+            elif self.path == '/translation/dictionary':
+                lab4.save_entry(form.get('word', ''), form.get('translation', ''), form.get('tag', ''), form.get('description', ''))
+                self.redirect('/translation/dictionary')
+            elif self.path == "/documents":
                 lab1.add_document(form.get("title", ""), form.get("body", ""), form.get("source_url", ""))
                 self.redirect("/documents")
             elif self.path == "/import":
@@ -562,36 +699,56 @@ class Handler(BaseHTTPRequestHandler):
                 if not 1 <= max_sentences <= 30 or not 1 <= max_keywords <= 50:
                     raise ValueError("Укажите от 1 до 30 предложений и от 1 до 50 ключевых слов")
                 result = summarize(form.get("document", ""), language=form.get("language", "ru"),
+                                   reference_documents=load_reference_documents(form.get("language", "ru")),
                                    max_sentences=max_sentences, max_keywords=max_keywords,
-                                   subject_area=form.get("subject_area", "").strip() or None)
+                                   subject_area=form.get("subject_area", "").strip() or None,
+                                   method=form.get("method", "extractive"))
                 summary_id = lab3_store.save(form.get("title", ""), result,
                                              form.get("source_url", ""))
                 self.redirect(f"/summary/result/{summary_id}")
             elif self.path == "/summary/delete":
                 lab3_store.delete(int(form.get("id", "0")))
                 self.redirect("/summary")
-            elif self.path == "/summary/ostis":
-                summary_id = int(form.get("id", "0"))
-                row = lab3_store.get(summary_id)
-                if row is None:
-                    self.send_html(error_page("Реферат не найден"), 404)
-                    return
-                saved = save_to_ostis(row["result"])
-                if saved:
-                    lab3_store.mark_ostis_saved(summary_id)
-                self.redirect(f'/summary/result/{summary_id}?ostis={"ok" if saved else "fail"}')
             else:
                 self.send_html(error_page("Страница не найдена"), 404)
+        except GenerativeError as exc:
+            self.send_html(summary_page(form_values=form, error=str(exc)), 503)
         except (ValueError, OSError, UnicodeError, FileNotFoundError) as exc:
-            self.send_html(error_page(str(exc)), 400)
+            if self.path == "/summary/create":
+                self.send_html(summary_page(form_values=form, error=str(exc)), 400)
+            else:
+                self.send_html(error_page(str(exc)), 400)
+
+
+def run(port=8765):
+    def request_exit(signum, frame):
+        raise KeyboardInterrupt
+
+    previous_handlers = {}
+    try:
+        for name in ('SIGINT', 'SIGTERM', 'SIGBREAK'):
+            if hasattr(signal, name):
+                signum = getattr(signal, name)
+                previous_handlers[signum] = signal.signal(signum, request_exit)
+        with watch_parent(), ApplicationServer(("127.0.0.1", port), Handler) as http_server:
+            initialize()
+            lab2.initialize()
+            lab3_store.initialize()
+            lab4.initialize()
+            lab4_server.start()
+            print(f"Откройте http://127.0.0.1:{http_server.server_port}", flush=True)
+            http_server.serve_forever(poll_interval=0.2)
+    except KeyboardInterrupt:
+        print("Приложение остановлено.", flush=True)
+    finally:
+        try:
+            lab4_server.stop()
+        finally:
+            for signum, handler in previous_handlers.items():
+                signal.signal(signum, handler)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EYAZIS: локальное веб-приложение")
     parser.add_argument("--port", type=int, default=8765)
-    args = parser.parse_args()
-    initialize()
-    lab2.initialize()
-    lab3_store.initialize()
-    print(f"Откройте http://127.0.0.1:{args.port}")
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    run(parser.parse_args().port)

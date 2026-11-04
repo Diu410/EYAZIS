@@ -1,17 +1,19 @@
-"""Extractive summarizer using the formulas from laboratory work 3.
-
-OSTIS is deliberately outside this module. The returned dictionary is the
-single result object that a future storage adapter can consume.
-"""
+"""Extractive summarizer using the formulas from laboratory work 3."""
 
 from collections import Counter
 from math import log
+from pathlib import Path
+import json
 import re
 
 
 RUSSIAN_WORD = re.compile(r"[А-Яа-яЁё]+")
 GERMAN_WORD = re.compile(r"[A-Za-zÄÖÜäöüß]+")
-SENTENCE = re.compile(r"[^.!?]+(?:[.!?]+|$)", re.DOTALL)
+SENTENCE_END = re.compile(r'[.!?]+[\"»”’\)\]]*(?=\s|$)')
+ABBREVIATION = re.compile(
+    r"(?:\b(?:т\s*\.\s*[едп]|т|гг?|стр|рис|им|др|см|проф|доц|руб|коп|"
+    r"z\s*\.\s*B|d\s*\.\s*h|u\s*\.\s*a|z|Dr|Prof|Nr|Abb|bzw|ca|vgl|"
+    r"usw|ggf|etc|St|S))\.$", re.IGNORECASE)
 PARAGRAPH = re.compile(r"\S.*?(?=(?:\r?\n\s*\r?\n)|\Z)", re.DOTALL)
 
 RUSSIAN_STOP = set("""
@@ -52,30 +54,63 @@ def _paragraphs(document: str) -> list[tuple[str, int]]:
             for match in PARAGRAPH.finditer(document) if match.group().strip()]
 
 
+def _sentence_spans(paragraph: str):
+    """Keep decimal numbers, common RU/DE abbreviations and initials intact."""
+    start = 0
+    for match in SENTENCE_END.finditer(paragraph):
+        punctuation = match.group()
+        prefix = paragraph[:match.start() + 1]
+        following = paragraph[match.end():].lstrip()
+        if punctuation.startswith('.') and following:
+            # German ordinal numbers: "im 17. Jahrhundert"; RU dates: "2026 г.".
+            if re.search(r'\d\.$', prefix) and re.match(r'(?:Jahrhundert\b|Jahr\b|г\.)', following):
+                continue
+            if ABBREVIATION.search(prefix):
+                continue
+            if re.search(r'\b[A-ZА-ЯЁ]\.$', prefix) and re.match(r'[A-ZА-ЯЁ]', following):
+                continue
+        end = match.end()
+        if paragraph[start:end].strip():
+            yield start, end
+        start = end
+    if paragraph[start:].strip():
+        yield start, len(paragraph)
+
+
 def _sentences(document: str) -> list[dict]:
     result = []
     for paragraph, paragraph_start in _paragraphs(document):
-        for match in SENTENCE.finditer(paragraph):
-            raw = match.group()
+        for begin, end in _sentence_spans(paragraph):
+            raw = paragraph[begin:end]
             sentence = raw.strip()
             if not sentence:
                 continue
-            before = match.start() + len(raw) - len(raw.lstrip())
+            # Do not turn a truncated last line or a heading into a full sentence.
+            if not re.search(r'[.!?][\"»”’\)\]]*$', sentence) and SENTENCE_END.search(document):
+                continue
+            before = begin + len(raw) - len(raw.lstrip())
             result.append({"sentence": sentence, "start": paragraph_start + before,
                            "paragraph_start": before, "paragraph_length": len(paragraph)})
     return result
 
 
+def load_reference_documents(language: str) -> list[str]:
+    """Read complete bundled documents in the selected language, without networking."""
+    if language not in ('ru', 'de'):
+        raise ValueError("Поддерживаются языки ru и de")
+    root = Path(__file__).with_name('corpus')
+    metadata = json.loads((root / 'sources.json').read_text(encoding='utf-8'))
+    return [(root / item['file']).read_text(encoding='utf-8')
+            for item in metadata if item['language'] == language]
+
+
 def _reference_collection(document: str, language: str,
                           reference_documents: list[str] | None) -> list[set[str]]:
-    if reference_documents is not None:
-        texts = [document, *reference_documents]
-    else:
-        texts = [paragraph for paragraph, _ in _paragraphs(document)]
-        # A document without paragraph breaks still needs an IDF collection.
-        if len(texts) == 1:
-            texts = [item["sentence"] for item in _sentences(document)]
-    return [set(_tokens(text, language)) for text in texts if text.strip()]
+    references = (load_reference_documents(language) if reference_documents is None
+                  else reference_documents)
+    # The input document belongs to DB exactly once, even when selected from corpus.
+    texts = {" ".join(text.split()): text for text in [document, *references] if text.strip()}
+    return [set(_tokens(text, language)) for text in texts.values()]
 
 
 def summarize(document: str, language: str = "ru",
@@ -86,8 +121,8 @@ def summarize(document: str, language: str = "ru",
 
     TF-IDF is 0.5 * (1 + TF(t,D)/TFmax(D)) * ln(|DB|/DF(t)). If a
     reference collection is supplied, DB consists of the input document plus
-    those documents; otherwise its paragraphs (or sentences for a single
-    paragraph) serve as document units. Scores follow the lab handout exactly.
+    those documents, without duplicates; otherwise complete bundled documents
+    of the selected language are used. Paragraphs are never IDF document units.
     """
     if not isinstance(document, str) or not document.strip():
         raise ValueError("Передайте непустой текст документа")
@@ -100,6 +135,8 @@ def summarize(document: str, language: str = "ru",
 
     sentences = _sentences(document)
     term_counts = Counter(_tokens(document, language))
+    if not term_counts:
+        raise ValueError("В документе нет значимых слов выбранного языка")
     collection = _reference_collection(document, language, reference_documents)
     document_frequency = Counter(term for unit in collection for term in unit)
     count_documents = len(collection)
@@ -133,6 +170,11 @@ def summarize(document: str, language: str = "ru",
         "keywords": [{"word": word, "weight": weight} for word, weight in keywords],
         "sentence_scores": scores,
         "language": language,
+        "idf_document_count": count_documents,
+        "idf_unit": "document",
+        "algorithm_version": 2,
+        "method": "extractive",
+        "keyword_method": "tfidf",
     }
     if subject_area:
         result["subject_area"] = subject_area

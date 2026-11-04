@@ -3,40 +3,44 @@
     "file": "sample_ru_computer_science.txt",
     "language": "ru",
     "subject_area": "computer science",
-    "title": "Информатика",
-    "source_urls": [
-      "https://ru.wikipedia.org/wiki/Информатика",
-      "https://ru.wikipedia.org/wiki/Алгоритм"
-    ]
+    "title": "Сравнение линейного и двоичного поиска",
+    "genre": "учебная научная статья",
+    "source_urls": [],
+    "characters": 4500,
+    "source": "corpus/documents.json",
+    "author": "Учебный авторский материал проекта, подготовлен с помощью ИИ; не внешняя публикация"
   },
   {
     "file": "sample_ru_literature.txt",
     "language": "ru",
     "subject_area": "литература",
-    "title": "Литература",
-    "source_urls": [
-      "https://ru.wikipedia.org/wiki/Литература",
-      "https://ru.wikipedia.org/wiki/Роман"
-    ]
+    "title": "Свобода и ответственность в романе «Преступление и наказание»",
+    "genre": "литературное сочинение",
+    "source_urls": [],
+    "characters": 4500,
+    "source": "corpus/documents.json",
+    "author": "Учебный авторский материал проекта, подготовлен с помощью ИИ; не внешняя публикация"
   },
   {
     "file": "sample_de_computer_science.txt",
     "language": "de",
     "subject_area": "computer science",
-    "title": "Informatik",
-    "source_urls": [
-      "https://de.wikipedia.org/wiki/Informatik",
-      "https://de.wikipedia.org/wiki/Algorithmus"
-    ]
+    "title": "Vergleich linearer und binärer Suche",
+    "genre": "учебная научная статья",
+    "source_urls": [],
+    "characters": 4500,
+    "source": "corpus/documents.json",
+    "author": "Учебный авторский материал проекта, подготовлен с помощью ИИ; не внешняя публикация"
   },
   {
     "file": "sample_de_literature.txt",
     "language": "de",
     "subject_area": "литература",
-    "title": "Literatur",
-    "source_urls": [
-      "https://de.wikipedia.org/wiki/Literatur",
-      "https://de.wikipedia.org/wiki/Roman"
-    ]
+    "title": "Freiheit und Verantwortung in Schuld und Sühne",
+    "genre": "литературное сочинение",
+    "source_urls": [],
+    "characters": 4500,
+    "source": "corpus/documents.json",
+    "author": "Учебный авторский материал проекта, подготовлен с помощью ИИ; не внешняя публикация"
   }
 ]

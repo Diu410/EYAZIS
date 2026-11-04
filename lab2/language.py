@@ -1,6 +1,7 @@
 """Laboratory 2: Russian/German HTML language recognition by three methods."""
 
 from collections import Counter
+from contextlib import closing
 from html.parser import HTMLParser
 from math import exp, sqrt, tanh
 from pathlib import Path
@@ -25,11 +26,11 @@ class HTMLText(HTMLParser):
         self.parts = []
 
     def handle_starttag(self, tag, attrs):
-        if tag in ("script", "style", "noscript"):
+        if tag in ("head", "script", "style", "noscript", "template"):
             self.hidden += 1
 
     def handle_endtag(self, tag):
-        if tag in ("script", "style", "noscript"):
+        if tag in ("head", "script", "style", "noscript", "template"):
             self.hidden = max(0, self.hidden - 1)
 
     def handle_data(self, data):
@@ -40,7 +41,7 @@ class HTMLText(HTMLParser):
 def html_text(html):
     parser = HTMLText()
     parser.feed(html)
-    return " ".join(parser.parts)
+    return " ".join(parser.parts).strip()
 
 
 def vector(text):
@@ -163,7 +164,7 @@ class Recognizer:
 
 
 def initialize():
-    with connect() as db:
+    with closing(connect()) as db, db:
         db.executescript("""
         CREATE TABLE IF NOT EXISTS language_documents (
             id INTEGER PRIMARY KEY,
@@ -187,7 +188,7 @@ def initialize():
 def save_result(filename, html, result, expected="", source_url=""):
     if expected and expected not in LANGS:
         raise ValueError("Ожидаемый язык должен быть ru или de")
-    with connect() as db:
+    with closing(connect()) as db, db:
         cursor = db.execute("""INSERT INTO language_documents
             (filename, html, text, expected, source_url, ngram, alphabet, neural, overall,
              ngram_ms, alphabet_ms, neural_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -197,18 +198,18 @@ def save_result(filename, html, result, expected="", source_url=""):
 
 
 def all_results():
-    with connect() as db:
+    with closing(connect()) as db, db:
         return [dict(row) for row in db.execute("SELECT * FROM language_documents ORDER BY id DESC")]
 
 
 def get_result(document_id):
-    with connect() as db:
+    with closing(connect()) as db, db:
         row = db.execute("SELECT * FROM language_documents WHERE id = ?", (document_id,)).fetchone()
     return dict(row) if row else None
 
 
 def delete_result(document_id):
-    with connect() as db:
+    with closing(connect()) as db, db:
         db.execute("DELETE FROM language_documents WHERE id = ?", (document_id,))
 
 

@@ -1,0 +1,9 @@
+Modern search systems help people find useful information in large collections of documents. A search engine receives a query, examines an index, and returns a ranked list of documents. The quality of the result depends on the collection, the representation of each document, and the method used to compare documents with the query.
+
+Before a search engine can answer a query, it must process the documents. The system divides the text into words, removes some common words, and records the frequency of each remaining term. An index connects each term to the documents that contain it. This structure makes the search faster because the system does not need to read every document again for every query.
+
+One common approach represents a document as a vector. Each component of the vector describes the importance of a term. A frequent word may be important within one document, but a word that appears in every document may be less useful for distinguishing results. The system can combine these two observations when it calculates term weights.
+
+The search engine also represents the query as a vector and compares it with document vectors. A similarity score allows the system to order the results. A high score does not guarantee that a document satisfies the user's information need. Therefore, researchers evaluate search quality using a collection of queries and independently judged relevant documents.
+
+The design of an information system involves more than the choice of an algorithm. Developers must consider the accuracy of the data, the speed of processing, the privacy of users, and the clarity of the interface. A useful system should explain its results and allow people to correct mistakes when necessary.

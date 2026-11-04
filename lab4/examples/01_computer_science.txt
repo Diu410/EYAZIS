@@ -1,0 +1,1 @@
+The algorithm processes data. The computer stores data in memory. The algorithm produces a result.

@@ -1,0 +1,1 @@
+Can the system learn? Yes, the system can learn! A small model processes text, and a larger model analyzes it.
