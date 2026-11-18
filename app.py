@@ -24,6 +24,11 @@ from lab4 import server as lab4_server
 from lifecycle import watch_parent
 from speech import routes as speech_routes
 from speech import storage as speech_storage
+from lab89 import pages as lab89_pages
+from lab89 import transcription as lab89_stt
+from lab89 import synthesis as lab89_tts
+from lab89 import translation as lab89_translation
+from lab89 import recordings as lab89_recordings
 
 recognizer = None
 
@@ -51,6 +56,7 @@ def page(title, content, active="home"):
         ("Лабораторная 5", [("speech5", "Фонетика речи", "/speech/5")]),
         ("Лабораторная 6", [("speech6", "Просодика речи", "/speech/6")]),
         ("Лабораторная 7", [("speech7", "Синтез речи", "/speech/7")]),
+        ("Лабораторные 8–9", [("speech89", "Синтез и распознавание", "/lab8")]),
         ("Справка", [("help", "Помощь", "/help")]),
     ]
     links = "".join(
@@ -62,7 +68,9 @@ def page(title, content, active="home"):
     section = {"home": "Обзор", "search": "Лабораторная 1", "documents": "Лабораторная 1",
                "metrics": "Лабораторная 1", "language": "Лабораторная 2",
                "summary": "Лабораторная 3", "translation": "Лабораторная 4", "dictionary": "Лабораторная 4", "help": "Справка"}.get(active, "Рабочее место")
-    if active.startswith("speech"):
+    if active == "speech89":
+        section = "Лабораторные 8–9"
+    elif active.startswith("speech"):
         section = "Лабораторная " + active.removeprefix("speech")
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{h(title)} — EYAZIS</title><link rel="stylesheet" href="/static/style.css"></head>
@@ -76,7 +84,7 @@ def home_page():
     document_count = len(lab1.list_documents())
     language_count = len(lab2.all_results())
     summary_count = len(lab3_store.all_summaries())
-    content = f'''<p class="lead">Семь лабораторных работ в одном локальном приложении. Выберите нужный раздел в боковом меню.</p>
+    content = f'''<p class="lead">Девять лабораторных работ в одном локальном приложении. Выберите нужный раздел в боковом меню.</p>
 <div class="overview-grid">
 <a class="overview-card" href="/search"><span class="work-number">01 / Информационный поиск</span><strong>Поиск документов</strong>
 <span>Векторная модель, TF·IDF и оценка качества выдачи.</span><em>{document_count} документов →</em></a>
@@ -88,6 +96,7 @@ def home_page():
 <a class="overview-card" href="/speech/5"><span class="work-number">05 / Фонетика</span><strong>Звуки русской речи</strong><span>Микрофон, осциллограммы, фонемы и качество записи.</span><em>Открыть →</em></a>
 <a class="overview-card" href="/speech/6"><span class="work-number">06 / Просодика</span><strong>Ударение и интонация</strong><span>Монтаж слов, основной тон, громкость и длительность.</span><em>Открыть →</em></a>
 <a class="overview-card" href="/speech/7"><span class="work-number">07 / Синтез речи</span><strong>Собрать фразу из звуков</strong><span>База фонем и слогов, склейка и сравнение с эталоном.</span><em>Открыть →</em></a>
+<a class="overview-card" href="/lab8"><span class="work-number">08–09 / Работа с речью</span><strong>Озвучивание и распознавание</strong><span>Создайте французскую запись и распознайте её в одном окне.</span><em>Открыть →</em></a>
 </div><div class="card"><h2>Как работать</h2><p>Выберите раздел слева. Из документов первых двух работ можно сразу перейти к реферированию. Каждый результат третьей работы сохраняется в SQLite и доступен для печати или скачивания.</p></div>'''
     return page("Лабораторные работы", content, "home")
 
@@ -561,9 +570,17 @@ class Handler(BaseHTTPRequestHandler):
         query = parameters.get("q", [""])[0].strip()
         if speech_routes.get(self, route, parameters, page):
             return
-        if route.path == "/api/search-assist":
+        if route.path == "/api/lab89/recordings":
+            self.send_json({"recordings": lab89_recordings.all_recordings()})
+        elif route.path.startswith("/api/lab89/audio/"):
+            try:
+                path = lab89_recordings.audio_path(route.path.rsplit('/', 1)[-1])
+                self.send_download(path.read_bytes(), path.name, "audio/mpeg")
+            except (ValueError, OSError):
+                self.send_json({"error": "Запись не найдена."}, 404)
+        elif route.path == "/api/search-assist":
             self.send_json(lab1.search_assist(query))
-        elif route.path in ("/static/style.css", "/static/translation-tree.js", "/static/speech-results.js", "/static/speech.css"):
+        elif route.path in ("/static/style.css", "/static/translation-tree.js", "/static/speech-results.js", "/static/speech.css", "/static/lab89.js", "/static/lab89.css"):
             data = (Path(__file__).with_name("static") / route.path.rsplit('/', 1)[-1]).read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/css; charset=utf-8" if route.path.endswith('.css') else "text/javascript; charset=utf-8")
@@ -572,6 +589,9 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         elif route.path == "/":
             self.send_html(home_page())
+        elif route.path in ("/lab8", "/lab9"):
+            lab = int(route.path[-1])
+            self.send_html(page("Синтез и распознавание речи", lab89_pages.content(lab), "speech89"))
         elif route.path == "/search":
             self.send_html(search_page(query))
         elif route.path == "/translation":
@@ -674,6 +694,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(error_page("Страница не найдена"), 404)
 
     def do_POST(self):
+        if self.path == "/api/lab8/translate":
+            lab89_translation.handle(self)
+            return
+        if self.path == "/api/lab8/synthesize":
+            lab89_tts.handle(self)
+            return
+        if self.path == "/api/lab9/transcribe":
+            lab89_stt.handle(self)
+            return
         if self.path.startswith("/api/speech/"):
             speech_routes.post(self)
             return

@@ -1,0 +1,24 @@
+services:
+  piper:
+    build:
+      context: .
+      dockerfile: Dockerfile.piper
+    ports:
+      - "127.0.0.1:8899:8899"
+    volumes:
+      - speech-models:/models
+    restart: unless-stopped
+  whisper:
+    build: .
+    ports:
+      - "127.0.0.1:8900:8899"
+    volumes:
+      - speech-models:/models
+    environment:
+      - HF_HOME=/models/huggingface
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=int8_float16
+    gpus: all
+    restart: unless-stopped
+volumes:
+  speech-models:
