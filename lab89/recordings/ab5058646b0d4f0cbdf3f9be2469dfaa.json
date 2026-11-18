@@ -1,0 +1,9 @@
+{
+  "id": "ab5058646b0d4f0cbdf3f9be2469dfaa",
+  "title": "Securite informatique",
+  "text": "La sécurité informatique vise à protéger les systèmes et les données contre les accès non autorisés. L'authentification vérifie l'identité d'un utilisateur, tandis que l'autorisation détermine les actions qu'il peut effectuer. Le chiffrement transforme les données afin de limiter leur lecture aux personnes qui possèdent la clé appropriée. Les sauvegardes permettent de restaurer des informations après une panne ou une perte. Les mises à jour corrigent des erreurs et peuvent réduire l'exposition aux vulnérabilités connues. Une protection efficace associe plusieurs de ces mesures.",
+  "voice": "fr-FR-DeniseNeural",
+  "rate": 1.0,
+  "source": "",
+  "created_at": "2026-11-18T18:38:15.984660+00:00"
+}

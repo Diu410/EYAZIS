@@ -1,0 +1,9 @@
+{
+  "id": "185674f4bd2944d796535ce3c3658e47",
+  "title": "Bases de donnees",
+  "text": "Une base de données permet d'organiser et de retrouver des informations. Dans une base relationnelle, les données sont réparties dans des tables composées de lignes et de colonnes. Une clé primaire identifie chaque ligne, tandis qu'une clé étrangère relie deux tables. Le langage SQL permet de rechercher, d'ajouter et de modifier les données. Une transaction regroupe plusieurs opérations afin de préserver la cohérence des informations. Les index peuvent accélérer les recherches, mais leur maintenance demande aussi des ressources.",
+  "voice": "fr-FR-DeniseNeural",
+  "rate": 1.0,
+  "source": "",
+  "created_at": "2026-11-18T18:38:01.782443+00:00"
+}

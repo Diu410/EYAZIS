@@ -1,0 +1,9 @@
+{
+  "id": "ba56f4d6363447c69d5569fe247df6a9",
+  "title": "Apprentissage automatique",
+  "text": "En apprentissage automatique, un algorithme construit un modèle à partir de données. Dans un problème supervisé, les exemples d'entraînement associent une entrée à une réponse attendue. Le modèle ajuste ses paramètres pour réduire les erreurs sur ces exemples. Pour évaluer sa capacité de généralisation, on utilise des données de test distinctes. Un modèle qui mémorise les exemples sans bien traiter de nouvelles données peut souffrir de surapprentissage. La qualité des données et le choix des mesures influencent l'interprétation des résultats.",
+  "voice": "fr-FR-DeniseNeural",
+  "rate": 1.0,
+  "source": "https://chercheurs.lille.inria.fr/pgermain/publis/memoire.pdf",
+  "created_at": "2026-11-18T15:05:56.628366+00:00"
+}

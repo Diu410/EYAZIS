@@ -1,0 +1,9 @@
+{
+  "id": "ab88493043284681976c03e5e940c085",
+  "title": "Recherche documentaire",
+  "text": "Les moteurs de recherche analysent de grandes collections de documents. Un index associe les termes aux documents dans lesquels ils apparaissent. Lorsqu'une personne formule une requête, le système compare les termes recherchés aux informations enregistrées. Il classe ensuite les résultats selon leur pertinence. La qualité peut être évaluée par la précision et le rappel. La précision mesure la proportion de résultats pertinents parmi les documents retrouvés. Le rappel indique la proportion de documents pertinents retrouvés dans la collection.",
+  "voice": "fr-FR-DeniseNeural",
+  "rate": 1.0,
+  "source": "https://interstices.info/algorithmes-mode-demploi/",
+  "created_at": "2026-11-18T15:05:52.525770+00:00"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "ed882a79a8f44776a16a798782f22c73",
+  "title": "Reseaux informatiques",
+  "text": "Un réseau informatique relie plusieurs appareils pour leur permettre d'échanger des données. Avant la transmission, un message peut être divisé en paquets. Chaque paquet traverse le réseau en suivant les règles définies par des protocoles de communication. Le protocole IP permet l'adressage et l'acheminement des paquets entre les machines. Le protocole TCP ajoute des mécanismes qui assurent la transmission ordonnée des données. La latence et le débit sont deux mesures importantes pour évaluer les performances d'une connexion.",
+  "voice": "fr-FR-DeniseNeural",
+  "rate": 1.0,
+  "source": "",
+  "created_at": "2026-11-18T18:38:09.152373+00:00"
+}
