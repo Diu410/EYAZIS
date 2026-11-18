@@ -6,7 +6,24 @@
   try { text.value = localStorage.getItem('eyazis-lab89-text') || example; } catch (_) { text.value = example; }
   function persist() { try { localStorage.setItem('eyazis-lab89-text', text.value); } catch (_) {} }
   text.addEventListener('input', persist);
-  $('example').addEventListener('click', () => { text.value = example; persist(); });
+  let examples = [];
+  async function loadExamples() {
+    const select = $('example-select');
+    try {
+      const response = await fetch('/api/lab89/examples');
+      if (!response.ok) throw new Error('Не удалось загрузить примеры.');
+      examples = (await response.json()).examples;
+      select.replaceChildren();
+      if (!examples.length) { select.add(new Option('Примеры недоступны', '')); return; }
+      examples.forEach(item => select.add(new Option(item.title, item.id)));
+      $('example').disabled = false;
+    } catch (_) { select.replaceChildren(new Option('Не удалось загрузить примеры', '')); }
+  }
+  $('example').addEventListener('click', () => {
+    const selected = examples.find(item => item.id === $('example-select').value);
+    if (selected) { text.value = selected.text; persist(); }
+  });
+  loadExamples();
   if ($('translate')) $('translate').addEventListener('click', async () => {
     const source = $('russian-text').value.trim(), button = $('translate'), notice = $('translation-status');
     if (!source) { notice.textContent = 'Введите русский текст.'; return; }

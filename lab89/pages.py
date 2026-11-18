@@ -10,7 +10,8 @@ def content(lab):
 <details class="voice-translate"><summary>Перевести текст с русского</summary>
 <label for="russian-text">Русский текст</label><textarea id="russian-text" rows="4" maxlength="4000" placeholder="Введите текст на русском языке"></textarea>
 <div class="voice-actions"><button id="translate" class="secondary" type="button">Перевести на французский</button><span id="translation-status" role="status" aria-live="polite">Перевод через Groq</span></div></details>
-<div class="voice-label-row"><label for="speech-text">Французский текст</label><button id="example" class="voice-text-button" type="button">Загрузить пример</button></div>
+<label for="example-select">Учебный текст</label><select id="example-select"><option value="">Загрузка примеров…</option></select>
+<div class="voice-label-row"><label for="speech-text">Французский текст</label><button id="example" class="voice-text-button" type="button" disabled>Загрузить пример</button></div>
 <textarea id="speech-text" rows="5" maxlength="6000" placeholder="Введите текст на французском"></textarea>
 <div class="voice-settings"><label>Голос<select id="voice"></select></label><label>Скорость <output id="rate-value">1</output><input id="rate" type="range" min="0.5" max="2" value="1" step="0.1"></label><label>Громкость <output id="volume-value">1</output><input id="volume" type="range" min="0" max="1" value="1" step="0.1"></label></div>
 <p id="voice-status" class="voice-hint" role="status"></p>
@@ -27,4 +28,4 @@ def content(lab):
 <div class="voice-result" aria-live="polite"><span class="voice-label">РЕЗУЛЬТАТ РАСПОЗНАВАНИЯ</span><p id="stt-status" role="status">Выберите запись или загрузите файл.</p><p id="transcript" class="voice-transcript">—</p><p class="voice-hint">Действие: <span id="action">—</span></p></div>
 <details class="voice-commands"><summary>Голосовые команды</summary><p>При точном совпадении фразы выполняется действие:</p><ul><li><strong>lire le texte</strong> — озвучить текст</li><li><strong>arrêter la lecture</strong> — остановить озвучивание</li><li><strong>effacer le texte</strong> — очистить текст</li><li><strong>afficher les commandes</strong> — показать список команд</li></ul></details>
 <p class="voice-hint">Piper и локальный Whisper обрабатывают данные на компьютере. При выборе Microsoft или Groq данные отправляются соответствующему сервису. Перевод с русского использует Groq.</p></section></div>
-<script src="/static/lab89.js?v=3" defer></script>'''
+<script src="/static/lab89.js?v=4" defer></script>'''

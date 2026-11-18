@@ -29,6 +29,7 @@ from lab89 import transcription as lab89_stt
 from lab89 import synthesis as lab89_tts
 from lab89 import translation as lab89_translation
 from lab89 import recordings as lab89_recordings
+from lab89 import examples as lab89_examples
 
 recognizer = None
 
@@ -556,10 +557,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Location", destination)
         self.end_headers()
 
-    def send_download(self, data, filename, content_type):
+    def send_download(self, data, filename, content_type, disposition="attachment"):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Disposition", f'{disposition}; filename="{filename}"')
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -570,12 +571,14 @@ class Handler(BaseHTTPRequestHandler):
         query = parameters.get("q", [""])[0].strip()
         if speech_routes.get(self, route, parameters, page):
             return
-        if route.path == "/api/lab89/recordings":
+        if route.path == "/api/lab89/examples":
+            self.send_json({"examples": lab89_examples.all_examples()})
+        elif route.path == "/api/lab89/recordings":
             self.send_json({"recordings": lab89_recordings.all_recordings()})
         elif route.path.startswith("/api/lab89/audio/"):
             try:
                 path = lab89_recordings.audio_path(route.path.rsplit('/', 1)[-1])
-                self.send_download(path.read_bytes(), path.name, "audio/mpeg")
+                self.send_download(path.read_bytes(), path.name, "audio/mpeg", disposition="inline")
             except (ValueError, OSError):
                 self.send_json({"error": "Запись не найдена."}, 404)
         elif route.path == "/api/search-assist":
