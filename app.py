@@ -697,6 +697,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(error_page("Страница не найдена"), 404)
 
     def do_POST(self):
+        if self.path == "/api/lab89/recordings/delete":
+            lab89_recordings.handle_delete(self)
+            return
         if self.path == "/api/lab8/translate":
             lab89_translation.handle(self)
             return

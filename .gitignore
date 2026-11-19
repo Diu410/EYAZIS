@@ -9,3 +9,4 @@ __pycache__/
 Thumbs.db
 .speech-backups/
 lab89/recordings/
+.env.groq

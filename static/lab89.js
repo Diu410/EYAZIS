@@ -99,30 +99,67 @@
   });
   if (!$('record')) return;
   const stt = $('stt-status'), transcript = $('transcript'), action = $('action');
-  let savedItems = [];
+  let savedItems = [], recordingGroups = [];
+  const textKey = item => (item.text || '').normalize('NFC').replace(/\s+/g, ' ').trim();
+  function activeRecordingId() { return $('recording-variants').value; }
   async function refreshRecordings(selectedId) {
     try {
       const response = await fetch('/api/lab89/recordings'); if (!response.ok) throw new Error('Не удалось загрузить записи.');
       savedItems = (await response.json()).recordings;
+      const groups = new Map();
+      savedItems.forEach(item => {
+        const key = textKey(item) || item.id;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+      });
+      recordingGroups = [...groups.values()];
       const select = $('saved-recordings'); select.replaceChildren();
       select.add(new Option(savedItems.length ? 'Выберите запись' : 'Сохранённых записей пока нет', ''));
-      savedItems.forEach(item => select.add(new Option(item.title, item.id)));
-      if (typeof selectedId === 'string' && savedItems.some(item => item.id === selectedId)) select.value = selectedId;
-      updateRecording();
+      recordingGroups.forEach(group => select.add(new Option(group[0].title, group[0].id)));
+      const group = typeof selectedId === 'string' && recordingGroups.find(items => items.some(item => item.id === selectedId));
+      if (group) select.value = group[0].id;
+      updateRecordingGroup(selectedId);
     } catch (error) { $('saved-source').textContent = error.message; }
   }
+  function updateRecordingGroup(selectedId) {
+    const group = recordingGroups.find(items => items[0].id === $('saved-recordings').value) || [];
+    const select = $('recording-variants'); select.replaceChildren();
+    group.forEach(item => {
+      const date = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+      select.add(new Option([item.voice || 'Голос неизвестен', item.rate ? `скорость ${item.rate}` : '', date].filter(Boolean).join(' · '), item.id));
+    });
+    if (typeof selectedId === 'string' && group.some(item => item.id === selectedId)) select.value = selectedId;
+    $('recording-variants-wrap').hidden = group.length < 2;
+    updateRecording();
+  }
   function updateRecording() {
-    const item = savedItems.find(entry => entry.id === $('saved-recordings').value), player = $('saved-audio'), link = $('download-recording');
+    const item = savedItems.find(entry => entry.id === activeRecordingId()), player = $('saved-audio'), link = $('download-recording');
     player.hidden = !item; link.hidden = !item;
+    $('delete-recording').disabled = !item;
     if (!item) { player.removeAttribute('src'); $('saved-source').textContent = ''; return; }
     const url = '/api/lab89/audio/' + encodeURIComponent(item.id);
     player.src = url; link.href = url; link.download = item.id + '.mp3';
     $('saved-source').textContent = (item.source ? 'Источник: ' + item.source + ' · ' : '') + 'Исходный текст: ' + item.text;
   }
-  $('saved-recordings').addEventListener('change', updateRecording);
-  $('refresh-recordings').addEventListener('click', refreshRecordings);
+  $('saved-recordings').addEventListener('change', () => updateRecordingGroup());
+  $('recording-variants').addEventListener('change', updateRecording);
+  $('refresh-recordings').addEventListener('click', () => refreshRecordings(activeRecordingId()));
+  $('delete-recording').addEventListener('click', async () => {
+    const id = activeRecordingId(), button = $('delete-recording');
+    if (!id) return;
+    const group = recordingGroups.find(items => items.some(item => item.id === id)) || [];
+    const next = group.find(item => item.id !== id);
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/lab89/recordings/delete', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Eyazis-Request': 'lab9'}, body: JSON.stringify({id})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Не удалось удалить запись.');
+      await refreshRecordings(next ? next.id : '');
+      stt.textContent = 'Озвучка удалена.';
+    } catch (error) { stt.textContent = 'Ошибка удаления: ' + error.message; updateRecording(); }
+  });
   $('transcribe-saved').addEventListener('click', async () => {
-    const id = $('saved-recordings').value;
+    const id = activeRecordingId();
     if (!id) { stt.textContent = 'Выберите сохранённую запись.'; return; }
     try { const response = await fetch('/api/lab89/audio/' + encodeURIComponent(id)); if (!response.ok) throw new Error('Запись не найдена.'); await send(await response.blob(), 'mp3'); }
     catch (error) { stt.textContent = 'Ошибка: ' + error.message; }

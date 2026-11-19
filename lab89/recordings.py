@@ -1,5 +1,6 @@
 """Persistent local MP3 collection shared by labs 8 and 9."""
 import json
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -33,9 +34,34 @@ def all_recordings():
 
 
 def audio_path(ident):
-    if len(ident) != 32 or any(c not in '0123456789abcdef' for c in ident):
+    if not isinstance(ident, str) or len(ident) != 32 or any(c not in '0123456789abcdef' for c in ident):
         raise ValueError('Неверный идентификатор записи.')
     path = ROOT / (ident + '.mp3')
     if not path.is_file():
         raise ValueError('Запись не найдена.')
     return path
+
+
+def handle_delete(handler):
+    origin = urlsplit(handler.headers.get('Origin', ''))
+    if (origin.scheme != 'http' or origin.netloc != handler.headers.get('Host', '')
+            or handler.headers.get('X-Eyazis-Request') != 'lab9'):
+        handler.send_json({'error': 'Запрос разрешён только со страницы приложения.'}, 403)
+        return
+    try:
+        length = int(handler.headers.get('Content-Length', '0'))
+        if not 0 < length <= 1024:
+            raise ValueError('Некорректный размер запроса.')
+        payload = json.loads(handler.rfile.read(length))
+        ident = payload['id']
+        audio = audio_path(ident)
+        metadata = ROOT / (ident + '.json')
+        if not metadata.is_file():
+            raise ValueError('Запись не найдена.')
+        audio.unlink()
+        metadata.unlink()
+        handler.send_json({'deleted': ident})
+    except (ValueError, TypeError, KeyError, UnicodeError) as exc:
+        handler.send_json({'error': str(exc)}, 400)
+    except OSError:
+        handler.send_json({'error': 'Не удалось удалить запись. Проверьте доступ к файлам.'}, 500)
