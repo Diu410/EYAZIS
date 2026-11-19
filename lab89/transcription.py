@@ -13,31 +13,44 @@ from . import local_client
 MAX_AUDIO = 10 * 1024 * 1024
 FORMATS = {"webm": "audio/webm", "wav": "audio/wav", "mp3": "audio/mpeg",
            "m4a": "audio/mp4", "mp4": "audio/mp4", "ogg": "audio/ogg", "flac": "audio/flac"}
+LANGUAGES = {'fr', 'ru', 'en', 'de'}
+CONTEXTS = {
+    'fr': 'Transcription en français. Informatique, algorithme, données, logiciel, réseau.',
+    'ru': 'Транскрипция на русском языке. Информатика, алгоритм, данные, программа, сеть.',
+    'en': 'English transcription. Computer science, algorithm, data, software, network.',
+    'de': 'Transkription auf Deutsch. Informatik, Algorithmus, Daten, Software, Netzwerk.',
+}
 
 
 def api_key():
     key = os.environ.get("GROQ_API_KEY", "").strip()
     if key:
         return key
-    # Reuse the existing local Agent credential when present; never expose its contents.
+    # Project-local key is convenient for this app; keep it outside version control.
     root = os.environ.get("LOCALAPPDATA")
-    path = Path(root) / "TgAgent" / "secrets" / ".env.groq" if root else None
-    if path and path.is_file():
-        for line in path.read_text(encoding="utf-8-sig").splitlines():
-            name, sep, value = line.partition("=")
-            if sep and name.strip() == "GROQ_API_KEY":
-                return value.strip().strip("\"'")
+    paths = [Path(__file__).resolve().parent.parent / '.env.groq']
+    if root:
+        paths.append(Path(root) / "TgAgent" / "secrets" / ".env.groq")
+    for path in paths:
+        if path.is_file():
+            for line in path.read_text(encoding="utf-8-sig").splitlines():
+                name, sep, value = line.partition("=")
+                if sep and name.strip() == "GROQ_API_KEY" and value.strip().strip("\"'"):
+                    return value.strip().strip("\"'")
     return ""
 
 
-def transcribe(audio, extension, key, opener=urlopen):
+def transcribe(audio, extension, key, opener=urlopen, language='fr'):
     if not key:
-        raise ValueError("Ключ GROQ_API_KEY не найден. Настройте переменную окружения или файл %LOCALAPPDATA%\\TgAgent\\secrets\\.env.groq.")
+        raise ValueError("Ключ GROQ_API_KEY не найден. Настройте переменную окружения или файл .env.groq в папке проекта.")
     if extension not in FORMATS or not audio or len(audio) > MAX_AUDIO:
         raise ValueError("Нужен аудиофайл webm, wav, mp3, m4a, mp4, ogg или flac размером до 10 МБ.")
+    if language not in LANGUAGES:
+        raise ValueError('Неподдерживаемый язык распознавания.')
     boundary = "eyazis" + uuid4().hex
     parts = []
-    for name, value in (("model", "whisper-large-v3-turbo"), ("language", "fr"), ("response_format", "json"), ("temperature", "0")):
+    for name, value in (("model", "whisper-large-v3-turbo"), ("language", language),
+                        ("prompt", CONTEXTS[language]), ("response_format", "json"), ("temperature", "0")):
         parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
     parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.{extension}"\r\nContent-Type: {FORMATS[extension]}\r\n\r\n'.encode() + audio + b'\r\n')
     parts.append(f'--{boundary}--\r\n'.encode())
@@ -75,13 +88,16 @@ def handle(handler):
         if extension not in FORMATS or not audio or len(audio) > MAX_AUDIO:
             raise ValueError("Неподдерживаемый формат или размер аудио.")
         engine = payload.get('engine', 'groq')
+        language = payload.get('language', 'fr')
+        if not isinstance(language, str) or language not in LANGUAGES:
+            raise ValueError('Неподдерживаемый язык распознавания.')
         if engine == 'local':
-            result = local_client.request('/transcribe', {'audio': payload['audio']})
+            result = local_client.request('/transcribe', {'audio': payload['audio'], 'language': language})
             text = result['text']
         elif engine == 'groq':
-            text = transcribe(audio, extension, api_key())
+            text = transcribe(audio, extension, api_key(), language=language)
         else:
             raise ValueError('Неизвестный движок распознавания.')
-        handler.send_json({"text": text, "language": "fr", "model": "whisper-large-v3-turbo", "engine": engine})
+        handler.send_json({"text": text, "language": language, "model": "whisper-large-v3-turbo", "engine": engine})
     except (ValueError, TypeError, UnicodeError, binascii.Error, OSError) as exc:
         handler.send_json({"error": str(exc)}, 400)

@@ -1,0 +1,1 @@
+Eine Suchmaschine analysiert Dokumente und erstellt einen Index. Der Index verbindet Begriffe mit den Dokumenten, in denen sie vorkommen. Wenn eine Person eine Suchanfrage eingibt, vergleicht das System sie mit dem Index und sortiert die Ergebnisse nach Relevanz. Präzision und Vollständigkeit helfen bei der Bewertung der Suchqualität.

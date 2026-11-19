@@ -30,6 +30,7 @@ from lab89 import synthesis as lab89_tts
 from lab89 import translation as lab89_translation
 from lab89 import recordings as lab89_recordings
 from lab89 import examples as lab89_examples
+from lab89 import vad as lab89_vad
 
 recognizer = None
 
@@ -697,6 +698,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(error_page("Страница не найдена"), 404)
 
     def do_POST(self):
+        if self.path == "/api/lab9/vad":
+            lab89_vad.handle(self)
+            return
         if self.path == "/api/lab89/recordings/delete":
             lab89_recordings.handle_delete(self)
             return

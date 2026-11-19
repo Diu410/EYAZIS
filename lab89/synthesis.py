@@ -5,7 +5,8 @@ import json
 from urllib.parse import urlsplit
 from . import recordings, local_client
 
-VOICES = {"fr-FR-DeniseNeural", "fr-FR-HenriNeural"}
+VOICES = {"fr-FR-DeniseNeural", "fr-FR-HenriNeural", "ru-RU-SvetlanaNeural",
+          "en-US-JennyNeural", "de-DE-KatjaNeural"}
 
 
 async def synthesize(text, voice, rate):

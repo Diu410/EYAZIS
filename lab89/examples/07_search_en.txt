@@ -1,0 +1,1 @@
+A search engine analyzes documents and builds an index. The index connects terms to the documents in which they appear. When a user enters a query, the system compares it with the index and ranks the results by relevance. Precision and recall help evaluate search quality.

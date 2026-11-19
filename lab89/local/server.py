@@ -81,8 +81,11 @@ class Handler(BaseHTTPRequestHandler):
                     audio = base64.b64decode(payload['audio'], validate=True)
                     if not audio or len(audio) > 10 * 1024 * 1024:
                         raise ValueError('Некорректный размер аудио')
+                    language = payload.get('language', 'fr')
+                    if language not in ('fr', 'ru', 'en', 'de'):
+                        raise ValueError('Неподдерживаемый язык распознавания')
                     # PyAV detects the format from the data rather than the file name.
-                    segments, _ = get_whisper().transcribe(io.BytesIO(audio), language='fr', task='transcribe', beam_size=5)
+                    segments, _ = get_whisper().transcribe(io.BytesIO(audio), language=language, task='transcribe', beam_size=5)
                     self.reply(200, {'text': ' '.join(segment.text.strip() for segment in segments).strip()})
                 else:
                     self.reply(404, {'error': 'Not found'})
